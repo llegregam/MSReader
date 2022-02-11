@@ -173,11 +173,11 @@ class Extractor:
         self.excluded_c12_areas = c12_areas[c12_areas.isin(["Excluded"]).all(axis=1)]
         self.excluded_c13_areas = c13_areas[c13_areas.isin(["Excluded"]).all(axis=1)]
         if not self.excluded_c12_areas.empty or not self.excluded_c13_areas.empty:
-            self.logger.info("Some metabolites were excluded during preprocessing")
+            self.logger.info("\nSome metabolites were excluded during area table processing:\n")
             if not self.excluded_c12_areas.empty:
-                self.logger.info(f"{self.excluded_c12_areas}")
+                self.logger.info(f"\n{self.excluded_c12_areas}")
             if not self.excluded_c12_areas.empty:
-                self.logger.info(f"{self.excluded_c13_areas}")
+                self.logger.info(f"\n{self.excluded_c13_areas}")
 
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
@@ -189,19 +189,23 @@ class Extractor:
     def generate_concentrations_table(self, loq_export):
 
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
-        concentrations = concentrations.pivot(index="Sample_Name", columns="Compound", values="Calculated Amt")
-        concentrations, conc_nulls = self._isolate_nulls(concentrations)
-        cal_data, cal_nulls = self._isolate_nulls(self.calib_data.T)
-        self.concentration_table = concentrations.T
-        self.conc_nulls = conc_nulls.T
-        loq_table = self._define_loq(concentrations)
-        self.loq_table = loq_table.T
-        self.calib_data = cal_data.T
-        self.cal_nulls = cal_nulls.T
-        if not self.cal_nulls.empty:
-            self.logger.info(f"\nSome metabolite concentrations were null in calibration data:\n{self.cal_nulls}")
-        if not self.conc_nulls.empty:
-            self.logger.info(f"\nSome metabolites were null in concentration table:\n{self.conc_nulls}")
+        concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
+        concentrations, conc_nulls = self._stat_replace(concentrations,
+                                                        to_replace=[np.nan, 0],
+                                                        value="NA", axis="row",
+                                                        drop=True)
+        self.concentration_table = concentrations.copy()
+        self.loq_table = self._define_loq(concentrations)
+        print(self.calib_data)
+        self.calib_data, cal_nulls = self._stat_replace(self.calib_data,
+                                                        to_replace=[np.nan, 0],
+                                                        value="NA", axis="row",
+                                                        drop=True)
+        if not conc_nulls.empty:
+            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls}")
+        if not cal_nulls.empty:
+            self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
+
         self.excel_tables.append(
             ("Concentrations", self.concentration_table),
         )
@@ -267,6 +271,15 @@ class Extractor:
                       f"Ratios:\n{self.ratios}")
         self.ratios = self.ratios.reset_index(level="Sample_Name")
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound", "Sample_Name")
+        self.ratios, removed_ratios = self._stat_replace(self.ratios, [0, np.inf, np.nan], None, "row", True)
+        # for val in [0, np.inf, np.nan]:
+        # for idx in self.ratios.index:
+        #     if (self.ratios.loc[idx, :].isin([0, np.inf, np.nan])).all():
+        #         removed.append(self.ratios.loc[idx, :])
+        #         self.ratios = self.ratios.drop(idx)
+        if not removed_ratios.empty:
+            self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinits,"
+                             f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
 
         self.excel_tables.append(
             ("Ratios", self.ratios)
@@ -302,11 +315,11 @@ class Extractor:
 
     def _define_loq(self, loq_table):
 
-        for col in loq_table.columns:
-            lloq_mask = loq_table.loc[:, col].apply(lambda x: float(x) < self.calib_data.at[col, "min"])
-            uloq_mask = loq_table.loc[:, col].apply(lambda x: float(x) > self.calib_data.at[col, "max"])
-            loq_table.loc[:, col] = loq_table.loc[:, col].where(~lloq_mask, other="<LLOQ")
-            loq_table.loc[:, col] = loq_table.loc[:, col].where(~uloq_mask, other=">ULOQ")
+        for idx in loq_table.index:
+            lloq_mask = loq_table.loc[idx, :].apply(lambda x: float(x) < self.calib_data.at[idx, "min"])
+            uloq_mask = loq_table.loc[idx, :].apply(lambda x: float(x) > self.calib_data.at[idx, "max"])
+            loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask, other="<LLOQ")
+            loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
         return loq_table
 
     def normalise(self, factor, unit):
@@ -382,7 +395,7 @@ class Extractor:
         dest = Path(path)
         dest = dest / "stat_output.tsv"
         stat_out = self._build_stat_output(conc_unit)
-        stat_out.to_csv(str(dest), sep="\t")
+        stat_out.to_csv(str(dest), sep="\t", index=False, encoding='utf-8-sig')
         self._output_log(path)
 
     def export_final_excel(self, path):
@@ -395,31 +408,78 @@ class Extractor:
         self._output_log(str(path))
         print(f"Done exporting. Path:\n {str(dest_path)}")
 
+    @staticmethod
+    def _stat_replace(df, to_replace, value, axis, drop=False):
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError(f"{df} is not a dataframe, it is of type {type(df)}")
+        else:
+            if df.empty:
+                raise ValueError(f"{df} is empty")
+            else:
+                if not isinstance(to_replace, list):
+                    to_replace = [to_replace]
+                removed = []
+                if axis == "row":
+                    for idx in df.index:
+                        if (df.loc[idx, :].isin(to_replace)).all():
+                            if drop:
+                                removed.append(df.loc[idx, :])
+                                df = df.drop(idx)
+                            else:
+                                df.loc[idx, :] = value
+                if axis == "column":
+                    for col in df.columns:
+                        if (df.loc[:, col].isin(to_replace)).all():
+                            if drop:
+                                removed.append(df.loc[:, col])
+                                df = df.drop(col, axis=1)
+                            else:
+                                df.loc[:, col] = value
+                if axis == "dataframe":
+                    df.replace(
+                        to_replace=to_replace,
+                        value="NA",
+                        inplace=True)
+        if drop:
+            try:
+                if axis == "row":
+                    dropped = pd.concat(removed, axis=1)
+                elif axis == "column":
+                    dropped = pd.concat(removed)
+            except ValueError:
+                dropped = pd.DataFrame.empty
+            return df, dropped
+        else:
+            return df
+
     def _build_stat_output(self, conc_unit):
 
         to_out = []
-        if hasattr(self, "c12_areas") and hasattr(self, "c13_areas"):
-            c12_areas = self.c12_areas.reset_index()
-            c13_areas = self.c13_areas.reset_index()
+        if isinstance(self.c12_areas, pd.DataFrame) and isinstance(self.c13_areas, pd.DataFrame):
+            c12_areas = self._stat_replace(self.c12_areas, 0, "NA", "row")
+            c13_areas = self._stat_replace(self.c13_areas, 0, "NA", "row")
+            c12_areas = c12_areas.reset_index()
+            c13_areas = c13_areas.reset_index()
             c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
             c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
             c12_areas.insert(2, "unit", "Arbitrary")
             c13_areas.insert(1, "type", "C13 area")
-            c13_areas.insert(2, "unit", "C13 area")
+            c13_areas.insert(2, "unit", "Arbitrary")
             to_out.append(c12_areas)
             to_out.append(c13_areas)
-        if hasattr(self, "concentration_table"):
-            concentrations = self.concentration_table.reset_index()
+        if isinstance(self.concentration_table, pd.DataFrame) or isinstance(self.loq_table, pd.DataFrame):
+            concentrations = self._stat_replace(self.loq_table.copy(), "<LLOQ", "NA", "dataframe")
+            concentrations = self._stat_replace(concentrations, ">ULOQ", "NA", "dataframe")
+            concentrations = concentrations.reset_index()
             concentrations = concentrations.rename({"Compound": "Features"}, axis=1)
-            concentrations["type"] = "concentration"
-            concentrations["unit"] = conc_unit
+            concentrations.insert(1, "type", "concentration")
+            concentrations.insert(2, "unit", conc_unit)
             to_out.append(concentrations)
-        if hasattr(self, "ratios"):
+        if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
             ratios = ratios.rename({"Compound": "Features"}, axis=1)
-            ratios["type"] = "C12/C13 ratios"
-            ratios["unit"] = "Arbitrary"
+            ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
 
@@ -451,7 +511,7 @@ if __name__ == "__main__":
                      "CM")
     qc_result = test.handle_qc()
     test.handle_calibration()
-    test.generate_areas_table()
+    test.generate_concentrations_table(True)
     # test.generate_concentrations_table(False)
     # test.generate_report()
-    test.get_ratios()
+    # test.get_ratios()
