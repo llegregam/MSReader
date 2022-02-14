@@ -147,6 +147,24 @@ class Extractor:
 
         self._generate_minmax_calib()
 
+    def _handle_mc_qc(self):
+
+        qc_mets = ["FruBP", "Oro", "Rib1P"]
+        qc_verif = self.qc_data[self.qc_data["Compound"].isin(qc_mets)].copy()
+        for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
+            qc_verif[col] = qc_verif[col].apply(lambda x: str(x).replace(",", "."))
+            qc_verif[col] = pd.to_numeric(qc_verif[col])
+        self.qc_table = qc_verif[["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
+        self.qc_table.set_index("Compound", inplace=True)
+        if abs(qc_verif["%Diff"].values.any()) > 20:
+            qc = False
+        else:
+            qc = True
+        self.qc_table = self.qc_table.astype(str)
+        self.qc_table = self.qc_table.style.apply(self._color_qc, axis=1, subset=["%Diff"])
+        self.excel_tables.append(("Quality Control", self.qc_table))
+        return qc
+
     def handle_qc(self):
         """
         Get run quality control. If False the run is invalidated.
@@ -154,7 +172,10 @@ class Extractor:
         """
 
         if self.met_class == "CM":
-            qc_res = self._handle_mc_qc()
+            if not self.qc_data.empty:
+                qc_res = self._handle_mc_qc()
+            else:
+                raise ValueError("No QC data detected")
             return qc_res
         else:
             pass
@@ -178,7 +199,8 @@ class Extractor:
                 self.logger.info(f"\n{self.excluded_c12_areas}")
             if not self.excluded_c12_areas.empty:
                 self.logger.info(f"\n{self.excluded_c13_areas}")
-
+        self.c12_areas.columns = natsorted(self.c12_areas.columns)
+        self.c13_areas.columns = natsorted(self.c13_areas.columns)
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
@@ -205,7 +227,8 @@ class Extractor:
             self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls}")
         if not cal_nulls.empty:
             self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
-
+        self.concentration_table.columns = natsorted(self.concentration_table.columns)
+        self.loq_table.columns = natsorted(self.loq_table.columns)
         self.excel_tables.append(
             ("Concentrations", self.concentration_table),
         )
@@ -272,15 +295,10 @@ class Extractor:
         self.ratios = self.ratios.reset_index(level="Sample_Name")
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound", "Sample_Name")
         self.ratios, removed_ratios = self._stat_replace(self.ratios, [0, np.inf, np.nan], None, "row", True)
-        # for val in [0, np.inf, np.nan]:
-        # for idx in self.ratios.index:
-        #     if (self.ratios.loc[idx, :].isin([0, np.inf, np.nan])).all():
-        #         removed.append(self.ratios.loc[idx, :])
-        #         self.ratios = self.ratios.drop(idx)
         if not removed_ratios.empty:
             self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinits,"
                              f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
-
+        self.ratios.columns = natsorted(self.ratios.columns)
         self.excel_tables.append(
             ("Ratios", self.ratios)
         )
@@ -324,24 +342,6 @@ class Extractor:
 
     def normalise(self, factor, unit):
         pass
-
-    def _handle_mc_qc(self):
-
-        qc_mets = ["FruBP", "Oro", "Rib1P"]
-        qc_verif = self.qc_data[self.qc_data["Compound"].isin(qc_mets)].copy()
-        for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
-            qc_verif[col] = qc_verif[col].apply(lambda x: str(x).replace(",", "."))
-            qc_verif[col] = pd.to_numeric(qc_verif[col])
-        self.qc_table = qc_verif[["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
-        self.qc_table.set_index("Compound", inplace=True)
-        if abs(qc_verif["%Diff"].values.any()) > 20:
-            qc = False
-        else:
-            qc = True
-        self.qc_table = self.qc_table.astype(str)
-        self.qc_table = self.qc_table.style.apply(self._color_qc, axis=1, subset=["%Diff"])
-        self.excel_tables.append(("Quality Control", self.qc_table))
-        return qc
 
     @staticmethod
     def _color_qc(col):
@@ -512,6 +512,5 @@ if __name__ == "__main__":
     qc_result = test.handle_qc()
     test.handle_calibration()
     test.generate_concentrations_table(True)
-    # test.generate_concentrations_table(False)
-    # test.generate_report()
-    # test.get_ratios()
+    test.generate_report()
+    test.get_ratios()
