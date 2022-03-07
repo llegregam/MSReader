@@ -5,6 +5,7 @@ import io
 import pandas as pd
 import numpy as np
 from natsort import natsorted, index_natsorted
+from typing import Any
 
 
 class Extractor:
@@ -53,7 +54,13 @@ class Extractor:
 
         self.met_class = met_class
 
-    def generate_metadata(self, fmt):
+    def generate_metadata(self, fmt: str) -> None:
+        """
+        Generate metadata file from input data.
+
+        :param fmt: export format
+        :return: None
+        """
 
         metadata = pd.DataFrame(columns=["Filename", "Sample_Name"])
         metadata["Filename"] = natsorted(self.data["Filename"].unique())
@@ -66,8 +73,12 @@ class Extractor:
             raise ValueError("Requested format is not recognized")
 
     @staticmethod
-    def _read_data(path):
-
+    def _read_data(path: str) -> pd.DataFrame:
+        """
+        Read input data
+        :param path: path to the data
+        :return: Pandas dataframe containing data
+        """
         if type(path) is str:
             datapath = Path(path)
             if datapath.suffix == ".csv":
@@ -81,7 +92,12 @@ class Extractor:
         return data
 
     @staticmethod
-    def get_min(row: pd.Series):
+    def get_min(row: pd.Series) -> float:
+        """
+        Get row minimum (used for applying along axis in a pandas dataframe using the apply method)
+        :param row: input row passed in by apply method
+        :return minimum_value: Row minimum value
+        """
         row = row.values
         only_num = [val for val in row if type(val) != str]
         if np.isnan(only_num).all():
@@ -91,7 +107,12 @@ class Extractor:
             return minimum_val
 
     @staticmethod
-    def get_max(row: pd.Series):
+    def get_max(row: pd.Series) -> float:
+        """
+        Get row maximum (used for applying along axis in a pandas dataframe using the apply method)
+        :param row: input row passed in by apply method
+        :return minimum_value: Row maximum value
+        """
         row = row.values
         only_num = [val for val in row if type(val) != str]
         if np.isnan(only_num).all():
@@ -101,11 +122,18 @@ class Extractor:
             return maximum_val
 
     def _replace_nf(self):
-
+        """
+        Replace initial N/F with 0
+        :return: None
+        """
         self.data.loc[:, "Area"] = self.data.loc[:, "Area"].replace("N/F", 0)
         self.data.loc[:, "Calculated Amt"] = self.data.loc[:, "Calculated Amt"].replace("N/F", 0)
 
     def _split_dataframes(self):
+        """
+        Split the original dataframe into sub-dataframes of each content type
+        :return: None
+        """
 
         self.calib_data = self.data[self.data["Sample Type"].str.contains("Cal")]
         self.sample_data = self.data[self.data["Sample Type"].str.contains("Unknown")]
@@ -122,11 +150,18 @@ class Extractor:
         self.sample_data = self.sample_data[~self.sample_data["Sample_Name"].str.contains("Blank")].copy()
 
     def _get_excluded(self):
-
+        """
+        Replace excluded points concentration with 'excluded'
+        :return: None
+        """
         self.calib_data.loc[:, "Calculated Amt"] = pd.to_numeric(self.calib_data["Calculated Amt"])
         self.calib_data.loc[self.calib_data["Excluded"] == True, "Calculated Amt"] = "Excluded"
 
     def _generate_minmax_calib(self):
+        """
+        Generate calibration dataframe with minimum and maximum value columns
+        :return: None
+        """
 
         min_max_calib = self.calib_data[~self.calib_data["Compound"].str.contains("C13")]
         min_max_calib = min_max_calib.sort_values(["Compound", "Sample_Name"],
@@ -144,7 +179,10 @@ class Extractor:
         )
 
     def handle_calibration(self):
-
+        """
+        Call the generate minmax calib function to handle the calibration df
+        :return: None
+        """
         self._generate_minmax_calib()
 
     def _handle_mc_qc(self):
@@ -208,26 +246,38 @@ class Extractor:
             ("C13_areas", self.c13_areas)
         )
 
+    def _color_concentrations(self):
+        pass
+
+
     def generate_concentrations_table(self, loq_export):
 
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
         concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
-        concentrations, conc_nulls = self._stat_replace(concentrations,
-                                                        to_replace=[np.nan, 0],
-                                                        value="NA", axis="row",
-                                                        drop=True)
+        concentrations, conc_nulls = self._replace(concentrations,
+                                                   to_replace=[np.nan, 0],
+                                                   value="NA", axis="row",
+                                                   drop=True)
         self.concentration_table = concentrations.copy()
         self.loq_table = self._define_loq(concentrations)
-        print(self.calib_data)
-        self.calib_data, cal_nulls = self._stat_replace(self.calib_data,
-                                                        to_replace=[np.nan, 0],
-                                                        value="NA", axis="row",
-                                                        drop=True)
+        self.calib_data, cal_nulls = self._replace(self.calib_data,
+                                                   to_replace=[np.nan, 0],
+                                                   value="NA", axis="row",
+                                                   drop=True)
         if not conc_nulls.empty:
-            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls}")
+            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls.T}")
         if not cal_nulls.empty:
             self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
-        self.concentration_table.columns = natsorted(self.concentration_table.columns)
+        new_cols = natsorted(self.concentration_table.columns)
+        self.concentration_table = self.concentration_table[new_cols]
+        removed_loq = []
+        for idx in self.loq_table.index:
+            if (self.loq_table.loc[idx, :] == "<LLOQ").all() or (self.loq_table.loc[idx, :] == ">ULOQ").all():
+                removed_loq.append(self.loq_table.loc[idx, :])
+                self.loq_table.drop(idx, inplace=True)
+        if removed_loq:
+            self.logger.info(f"\nSome metabolite data are all outside the limit of quantification:"
+                             f"\n{pd.concat(removed_loq, axis=1).T}\n")
         self.loq_table.columns = natsorted(self.loq_table.columns)
         self.excel_tables.append(
             ("Concentrations", self.concentration_table),
@@ -294,7 +344,7 @@ class Extractor:
                       f"Ratios:\n{self.ratios}")
         self.ratios = self.ratios.reset_index(level="Sample_Name")
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound", "Sample_Name")
-        self.ratios, removed_ratios = self._stat_replace(self.ratios, [0, np.inf, np.nan], None, "row", True)
+        self.ratios, removed_ratios = self._replace(self.ratios, [0, np.inf, np.nan], "NA", "row", True)
         if not removed_ratios.empty:
             self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinits,"
                              f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
@@ -409,7 +459,24 @@ class Extractor:
         print(f"Done exporting. Path:\n {str(dest_path)}")
 
     @staticmethod
-    def _stat_replace(df, to_replace, value, axis, drop=False):
+    def _replace(
+            df: pd.DataFrame,
+            to_replace: int or str or float or list,
+            value: Any,
+            axis: str,
+            drop: bool = False
+            ) -> pd.DataFrame:
+
+        """
+        Homemade replace function
+        :param df: dataframe in which to replace values
+        :param to_replace: value(s) to replace
+        :param value: value to replace with
+        :param axis: axis on which to apply the method (can be whole dataframe)
+        :param drop: should row or column be dropped if the replacing value take the whole axis (only for axis=row or column)
+        :return: replaced dataframe and removed axes if drop=True
+        """
+
         if not isinstance(df, pd.DataFrame):
             raise TypeError(f"{df} is not a dataframe, it is of type {type(df)}")
         else:
@@ -447,7 +514,7 @@ class Extractor:
                 elif axis == "column":
                     dropped = pd.concat(removed)
             except ValueError:
-                dropped = pd.DataFrame.empty
+                dropped = pd.DataFrame(columns=df.columns)
             return df, dropped
         else:
             return df
@@ -456,30 +523,31 @@ class Extractor:
 
         to_out = []
         if isinstance(self.c12_areas, pd.DataFrame) and isinstance(self.c13_areas, pd.DataFrame):
-            c12_areas = self._stat_replace(self.c12_areas, 0, "NA", "row")
-            c13_areas = self._stat_replace(self.c13_areas, 0, "NA", "row")
+            c12_areas = self._replace(self.c12_areas, 0, "NA", "row")
+            c13_areas = self._replace(self.c13_areas, 0, "NA", "row")
             c12_areas = c12_areas.reset_index()
             c13_areas = c13_areas.reset_index()
-            c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
-            c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
+            c12_areas = c12_areas.rename({"Compound": "features"}, axis=1)
+            c13_areas = c13_areas.rename({"Compound": "features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
-            c12_areas.insert(2, "unit", "Arbitrary")
+            c12_areas.insert(2, "unite", "Arbitrary")
             c13_areas.insert(1, "type", "C13 area")
-            c13_areas.insert(2, "unit", "Arbitrary")
+            c13_areas.insert(2, "unite", "Arbitrary")
             to_out.append(c12_areas)
             to_out.append(c13_areas)
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(self.loq_table, pd.DataFrame):
-            concentrations = self._stat_replace(self.loq_table.copy(), "<LLOQ", "NA", "dataframe")
-            concentrations = self._stat_replace(concentrations, ">ULOQ", "NA", "dataframe")
+            concentrations = self._replace(self.loq_table.copy(), "<LLOQ", "NA", "dataframe")
+            concentrations = self._replace(concentrations, ">ULOQ", "NA", "dataframe")
             concentrations = concentrations.reset_index()
-            concentrations = concentrations.rename({"Compound": "Features"}, axis=1)
+            concentrations = concentrations.rename({"Compound": "features"}, axis=1)
             concentrations.insert(1, "type", "concentration")
-            concentrations.insert(2, "unit", conc_unit)
+            concentrations.insert(2, "unite", conc_unit)
             to_out.append(concentrations)
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
-            ratios = ratios.rename({"Compound": "Features"}, axis=1)
+            ratios = ratios.rename({"Compound": "features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
+            ratios.insert(2, "unite", "Arbitrary")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
 
