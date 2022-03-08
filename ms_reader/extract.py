@@ -185,24 +185,6 @@ class Extractor:
         """
         self._generate_minmax_calib()
 
-    def _handle_mc_qc(self):
-
-        qc_mets = ["FruBP", "Oro", "Rib1P"]
-        qc_verif = self.qc_data[self.qc_data["Compound"].isin(qc_mets)].copy()
-        for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
-            qc_verif[col] = qc_verif[col].apply(lambda x: str(x).replace(",", "."))
-            qc_verif[col] = pd.to_numeric(qc_verif[col])
-        self.qc_table = qc_verif[["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
-        self.qc_table.set_index("Compound", inplace=True)
-        if abs(qc_verif["%Diff"].values.any()) > 20:
-            qc = False
-        else:
-            qc = True
-        self.qc_table = self.qc_table.astype(str)
-        self.qc_table = self.qc_table.style.apply(self._color_qc, axis=1, subset=["%Diff"])
-        self.excel_tables.append(("Quality Control", self.qc_table))
-        return qc
-
     def handle_qc(self):
         """
         Get run quality control. If False the run is invalidated.
@@ -210,13 +192,30 @@ class Extractor:
         """
 
         if self.met_class == "CM":
-            if not self.qc_data.empty:
-                qc_res = self._handle_mc_qc()
-            else:
-                raise ValueError("No QC data detected")
-            return qc_res
+            qc_mets = ["FruBP", "Oro", "Rib1P"]
+            qc_verif = self.qc_data[self.qc_data["Compound"].isin(qc_mets)].copy()
+        elif self.met_class == "AA" or self.met_class == "CoA":
+            qc_verif = self.qc_data[~self.qc_data["Compound"].str.contains("C13")].copy()
         else:
-            pass
+            raise KeyError("The selected metabolite class is not valid. Valid classes are CM for Central Metabolites, "
+                           "AA for Amino Acids and CoA for Coenzymes A")
+
+        for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
+            qc_verif[col] = qc_verif[col].apply(lambda x: str(x).replace(",", "."))
+            qc_verif[col] = pd.to_numeric(qc_verif[col], errors="coerce")
+
+        self.qc_table = qc_verif[["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
+        self.qc_table.set_index("Compound", inplace=True)
+        if (abs(qc_verif["%Diff"].values) > 20).any():
+            qc = False
+        else:
+            qc = True
+        self.qc_table = self.qc_table.astype(str)
+
+        self.qc_table = self.qc_table.style.apply(self._color_qc, axis=1, subset=["%Diff"])
+
+        self.excel_tables.append(("Quality Control", self.qc_table))
+        return qc
 
     def generate_areas_table(self):
 
@@ -248,7 +247,6 @@ class Extractor:
 
     def _color_concentrations(self):
         pass
-
 
     def generate_concentrations_table(self, loq_export):
 
@@ -465,7 +463,7 @@ class Extractor:
             value: Any,
             axis: str,
             drop: bool = False
-            ) -> pd.DataFrame:
+    ) -> pd.DataFrame:
 
         """
         Homemade replace function
@@ -574,11 +572,12 @@ class QCError(Error):
 
 if __name__ == "__main__":
     test = Extractor(r"C:\Users\legregam\Documents\Projets\MSReader\test\20210506_SOKOL_filtres_MC_quant.xlsx",
-                     r"C:\Users\legregam\Documents\Projets\MSReader\test\Calibration Report.xlsx",
-                     r"C:\Users\legregam\Documents\Projets\MSReader\test\Sample_List_test.xlsx",
-                     "CM")
+                     None, None, "AA")
     qc_result = test.handle_qc()
-    test.handle_calibration()
-    test.generate_concentrations_table(True)
-    test.generate_report()
-    test.get_ratios()
+
+    # r"C:\Users\legregam\Documents\Projets\MSReader\test\Calibration Report.xlsx",
+    # r"C:\Users\legregam\Documents\Projets\MSReader\test\Sample_List_test.xlsx",
+    # test.handle_calibration()
+    # test.generate_concentrations_table(True)
+    # test.generate_report()
+    # test.get_ratios()

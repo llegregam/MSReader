@@ -17,10 +17,6 @@ qc_type = st.selectbox(
 )
 
 if data:
-    if qc_type == "Amino Acids":
-        raise NotImplementedError("Amino Acid QC not yet implemented")
-    if qc_type == "Coenzymes A":
-        raise NotImplementedError("Coenzyme A QC not yet implemented")
     data = pd.read_excel(data, engine="openpyxl")
     if report:
         report = pd.read_excel(report, engine="openpyxl")
