@@ -10,7 +10,7 @@ from typing import Any
 
 class Extractor:
 
-    def __init__(self, data_path, calrep_path=None, metadata_path=None, met_class="CM"):
+    def __init__(self, data_path, calrep_path=None, met_class="CM"):
 
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
@@ -38,12 +38,7 @@ class Extractor:
             self.calrep = None
         else:
             self.calrep = Extractor._read_data(calrep_path)
-        if metadata_path is None:
-            self.metadata = None
-            self.data["Sample_Name"] = self.data["Filename"]
-        else:
-            self.metadata = Extractor._read_data(metadata_path)
-            self.data = self.data.merge(self.metadata)
+        self.data["Sample_Name"] = self.data["Filename"]
         self.data.drop("Filename", axis=1, inplace=True)
         columns = ["Compound", "Sample_Name", "Area", "Sample Type", "Calculated Amt", "Theoretical Amt",
                    "Response Ratio", "Excluded", "%Diff"]
@@ -236,8 +231,10 @@ class Extractor:
                 self.logger.info(f"\n{self.excluded_c12_areas}")
             if not self.excluded_c12_areas.empty:
                 self.logger.info(f"\n{self.excluded_c13_areas}")
-        self.c12_areas.columns = natsorted(self.c12_areas.columns)
-        self.c13_areas.columns = natsorted(self.c13_areas.columns)
+        c12_cols = natsorted(self.c12_areas.columns)
+        c13_cols = natsorted(self.c13_areas.columns)
+        self.c12_areas = self.c12_areas[c12_cols]
+        self.c13_areas = self.c13_areas[c13_cols]
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
@@ -276,7 +273,8 @@ class Extractor:
         if removed_loq:
             self.logger.info(f"\nSome metabolite data are all outside the limit of quantification:"
                              f"\n{pd.concat(removed_loq, axis=1).T}\n")
-        self.loq_table.columns = natsorted(self.loq_table.columns)
+        new_loq_cols = natsorted(self.loq_table.columns)
+        self.loq_table = self.loq_table[new_loq_cols]
         self.excel_tables.append(
             ("Concentrations", self.concentration_table),
         )
@@ -293,7 +291,10 @@ class Extractor:
         c12_compounds, missing_c13_std = self._check_if_std(
             list(c12["Compound"].unique()), list(c13["Compound"].unique())
         )
-        self.logger.info(f"\nMetabolites missing from IDMS: \n{missing_c13_std}")
+        if missing_c13_std:
+            self.logger.info(f"Metabolites missing from IDMS: \n{missing_c13_std}")
+        else:
+            self.logger.info("All mMetabolites are presentin the IDMS")
 
         # Drop missing compounds from c12 df
         c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
@@ -301,7 +302,8 @@ class Extractor:
         c13.set_index(["Compound", "Sample_Name"], inplace=True)
         c12.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
         c13.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
-        c12.drop(missing_c13_std, inplace=True)
+        if missing_c13_std:
+            c12.drop(missing_c13_std, inplace=True)
 
         self.logger.warning(f"\nMetabolites with null areas in c13 data:\n"
                             f"{pd.pivot_table(c13[c13['Area'] == 0], 'Area', 'Compound', 'Sample_Name')}\n")
@@ -344,9 +346,11 @@ class Extractor:
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound", "Sample_Name")
         self.ratios, removed_ratios = self._replace(self.ratios, [0, np.inf, np.nan], "NA", "row", True)
         if not removed_ratios.empty:
-            self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinits,"
+            self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinites,"
                              f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
-        self.ratios.columns = natsorted(self.ratios.columns)
+        new_cols = natsorted(self.ratios.columns)
+        self.ratios = self.ratios[new_cols]
+        self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
         self.excel_tables.append(
             ("Ratios", self.ratios)
         )
@@ -466,13 +470,12 @@ class Extractor:
     ) -> pd.DataFrame:
 
         """
-        Homemade replace function
-        :param df: dataframe in which to replace values
-        :param to_replace: value(s) to replace
-        :param value: value to replace with
-        :param axis: axis on which to apply the method (can be whole dataframe)
-        :param drop: should row or column be dropped if the replacing value take the whole axis (only for axis=row or column)
-        :return: replaced dataframe and removed axes if drop=True
+
+        Homemade replace function :param df: dataframe in which to replace values :param to_replace: value(s) to
+        replace :param value: value to replace with :param axis: axis on which to apply the method (can be whole
+        dataframe) :param drop: should row or column be dropped if the replacing value take the whole axis (only for
+        axis=row or column) :return: replaced dataframe and removed axes if drop=True
+
         """
 
         if not isinstance(df, pd.DataFrame):
@@ -521,34 +524,35 @@ class Extractor:
 
         to_out = []
         if isinstance(self.c12_areas, pd.DataFrame) and isinstance(self.c13_areas, pd.DataFrame):
-            c12_areas = self._replace(self.c12_areas, 0, "NA", "row")
-            c13_areas = self._replace(self.c13_areas, 0, "NA", "row")
+            c12_areas = self._replace(self.c12_areas, [0, np.inf, ""], "NA", "row")
+            c13_areas = self._replace(self.c13_areas, [0, np.inf, ""], "NA", "row")
             c12_areas = c12_areas.reset_index()
             c13_areas = c13_areas.reset_index()
-            c12_areas = c12_areas.rename({"Compound": "features"}, axis=1)
-            c13_areas = c13_areas.rename({"Compound": "features"}, axis=1)
+            c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
+            c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
-            c12_areas.insert(2, "unite", "Arbitrary")
+            c12_areas.insert(2, "unit", "Arbitrary")
             c13_areas.insert(1, "type", "C13 area")
-            c13_areas.insert(2, "unite", "Arbitrary")
+            c13_areas.insert(2, "unit", "Arbitrary")
             to_out.append(c12_areas)
             to_out.append(c13_areas)
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(self.loq_table, pd.DataFrame):
             concentrations = self._replace(self.loq_table.copy(), "<LLOQ", "NA", "dataframe")
             concentrations = self._replace(concentrations, ">ULOQ", "NA", "dataframe")
+            concentrations = self._replace(concentrations, "", "NA", "dataframe")
             concentrations = concentrations.reset_index()
-            concentrations = concentrations.rename({"Compound": "features"}, axis=1)
+            concentrations = concentrations.rename({"Compound": "Features"}, axis=1)
             concentrations.insert(1, "type", "concentration")
-            concentrations.insert(2, "unite", conc_unit)
+            concentrations.insert(2, "unit", conc_unit)
             to_out.append(concentrations)
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
-            ratios = ratios.rename({"Compound": "features"}, axis=1)
+            ratios = self._replace(ratios, [np.inf, np.nan, ""], "NA", "dataframe")
+            ratios = ratios.rename({"Compound": "Features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
-            ratios.insert(2, "unite", "Arbitrary")
+            ratios.insert(2, "unit", "Arbitrary")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
-
         return stat_out
 
 
@@ -572,7 +576,7 @@ class QCError(Error):
 
 if __name__ == "__main__":
     test = Extractor(r"C:\Users\legregam\Documents\Projets\MSReader\test\20210506_SOKOL_filtres_MC_quant.xlsx",
-                     None, None, "AA")
+                     None, "AA")
     qc_result = test.handle_qc()
 
     # r"C:\Users\legregam\Documents\Projets\MSReader\test\Calibration Report.xlsx",

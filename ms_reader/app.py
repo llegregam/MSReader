@@ -4,13 +4,13 @@ from extract import Extractor
 
 st.title("MS_Reader Demo App")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     data = st.file_uploader("Upload Data")
 with col2:
     report = st.file_uploader("Upload Report File (optional)")
-with col3:
-    metadata = st.file_uploader("Upload Metadata (optional)")
+# with col3:
+#     metadata = st.file_uploader("Upload Metadata (optional)")
 qc_type = st.selectbox(
     "Choose molecular type",
     ["--", "Central Metabolites", "Amino Acids", "Coenzymes A"]
@@ -22,10 +22,6 @@ if data:
         report = pd.read_excel(report, engine="openpyxl")
     else:
         report = None
-    if metadata:
-        metadata = pd.read_excel(metadata, engine="openpyxl")
-    else:
-        report = None
     if qc_type == "Central Metabolites":
         qc_type = "CM"
     elif qc_type == "Amino Acids":
@@ -34,7 +30,7 @@ if data:
         qc_type = "CoA"
     else:
         qc_type = None
-    msr = Extractor(data, report, metadata, qc_type)
+    msr = Extractor(data, report, qc_type)
     if qc_type is not None:
         qc_result = msr.handle_qc()
         if not qc_result:
