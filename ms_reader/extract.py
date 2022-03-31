@@ -445,7 +445,7 @@ class Extractor:
     def export_stat_output(self, path, conc_unit):
 
         dest = Path(path)
-        dest = dest / "stat_output.tsv"
+        dest = dest / "output_for_graphstat.tsv"
         stat_out = self._build_stat_output(conc_unit)
         stat_out.to_csv(str(dest), sep="\t", index=False, encoding='utf-8-sig')
         self._output_log(path)
