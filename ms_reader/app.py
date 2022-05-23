@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 from extract import Extractor
+from ms_reader import __version__
 
-st.title("MS_Reader Demo App")
+st.title(f"Welcome to MS_Reader (v{__version__})")
 
 col1, col2 = st.columns(2)
 with col1:
