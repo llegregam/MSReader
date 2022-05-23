@@ -1,9 +1,32 @@
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
-from extract import Extractor
-from ms_reader import __version__
 
+from extract import Extractor
+from ms_reader import __version__, __file__
+
+
+def check_uptodate():
+    """Compare installed and most recent package versions."""
+    try:
+        pf_path = Path(__file__).parent
+        with open(str(Path(pf_path, "last_version.txt")), "r") as f:
+            lastversion = f.read()
+        if lastversion != __version__:
+            # change the next line to streamlit
+            st.info(
+                f'New version available ({lastversion}). \n\n'
+                f'You can update MS_reader with: "pip install --upgrade ms_reader". \n\n'
+                f'Check the documentation for more information.'
+            )
+    except Exception:
+        pass
+
+
+st.set_page_config(page_title=f"MS_Reader (v{__version__})")
 st.title(f"Welcome to MS_Reader (v{__version__})")
+check_uptodate()
 
 col1, col2 = st.columns(2)
 with col1:
