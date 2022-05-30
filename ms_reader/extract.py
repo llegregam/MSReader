@@ -73,9 +73,11 @@ class Extractor:
         :return:
         """
 
+        # Check that volume normalisation columns are present
         for col in ["Resuspension_Volume", "Volume_Unit"]:
             if col not in self.metadata.columns:
                 raise ValueError(f"{col} is missing from the metadata file columns")
+        # Check if there are other normalisations to make, and if so if they are well paired
         if len(self.metadata.columns) > 2:
             col_nums = []
             number_cols = int((len(self.metadata.columns) - 2) / 2)
@@ -88,6 +90,17 @@ class Extractor:
                 else:
                     if col != f"Norm{num}_Unit":
                         raise ValueError(f'The column "{col}" is not right format. Expected format: "Norm{num}_Unit"')
+        # Convert all values to numeric and intercept any conversion errors which might mean some strings are present
+        try:
+            self.metadata.apply(
+                lambda s: pd.to_numeric(s, errors="raise")
+            )
+        except ValueError:
+            raise TypeError("Error while converting to numeric values. Are you sure your metadata file contains only numbers?")
+        except Exception:
+            raise RuntimeError("Unknown error while converting to numeric values.")
+        # Handle NaNs
+        self.metadata.fillna(1, inplace=True)
 
     def generate_metadata(self, nb_norms: int = 1) -> pd.DataFrame:
         """
