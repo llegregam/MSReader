@@ -54,7 +54,6 @@ class Extractor:
                                  "try again.")
 
             self.metadata.set_index("Sample_Name", inplace=True)
-            print(self.metadata)
             self._check_metadata_columns()
 
         self.data.drop("Filename", axis=1, inplace=True)
@@ -77,6 +76,8 @@ class Extractor:
         for col in ["Resuspension_Volume", "Volume_Unit"]:
             if col not in self.metadata.columns:
                 raise ValueError(f"{col} is missing from the metadata file columns")
+        md_values_cols = ["Resuspension_Volume"]
+        md_unit_cols = ["Volume_Unit"]
         # Check if there are other normalisations to make, and if so if they are well paired
         if len(self.metadata.columns) > 2:
             col_nums = []
@@ -87,20 +88,32 @@ class Extractor:
                 if idx % 2 == 0:
                     if col != f"Norm{num}":
                         raise ValueError(f'The column "{col}" is not right format. Expected format: "Norm{num}"')
+                    md_values_cols.append(col)
                 else:
                     if col != f"Norm{num}_Unit":
                         raise ValueError(f'The column "{col}" is not right format. Expected format: "Norm{num}_Unit"')
-        # Convert all values to numeric and intercept any conversion errors which might mean some strings are present
+                    md_unit_cols.append(col)
+
+        self.md_units = self.metadata[md_unit_cols]
+        self.md_values = self.metadata[md_values_cols]
+
+        # Convert all md_values to numeric and intercept any conversion errors which might mean some strings are present
         try:
-            self.metadata.apply(
+            self.md_values.apply(
                 lambda s: pd.to_numeric(s, errors="raise")
             )
         except ValueError:
             raise TypeError("Error while converting to numeric values. Are you sure your metadata file contains only numbers?")
         except Exception:
             raise RuntimeError("Unknown error while converting to numeric values.")
-        # Handle NaNs
-        self.metadata.fillna(1, inplace=True)
+        else:
+            # Handle NaNs
+            self.md_values.fillna(1, inplace=True)
+
+        # Make sure units are the same for all samples
+        for col in self.md_units.columns:
+            if len(self.md_units[col].unique()) != 1:
+                raise ValueError(f"The column {col} has more than one unit")
 
     def generate_metadata(self, nb_norms: int = 1) -> pd.DataFrame:
         """
@@ -300,27 +313,51 @@ class Extractor:
     def _color_concentrations(self):
         pass
 
+    def normalise_concentrations(self, df):
+
+        df = df.apply(
+            lambda s: pd.to_numeric(s, errors="raise")
+        )
+
+        for norm in self.md_values.columns:
+            for col in df.columns:
+                df[col] = df[col].divide(self.md_values.at[col, norm])
+        return df
+
+
     def generate_concentrations_table(self, loq_export):
 
+        # Isolate the C12 data
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
+        # transpose the data
         concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
+        # Replace nans and nulls with "NA"
         concentrations, conc_nulls = self._replace(concentrations,
                                                    to_replace=[np.nan, 0],
                                                    value="NA", axis="row",
                                                    drop=True)
         self.concentration_table = concentrations.copy()
-        self.loq_table = self._define_loq(concentrations)
+        # If metadata detected, normalise the concentrations and do loq, else only do loq
+        if self.metadata is not None:
+            self.normalised_concentrations = self.normalise_concentrations(self.concentration_table)
+            self.loq_table = self._define_loq(self.normalised_concentrations.copy())
+        else:
+            self.loq_table = self._define_loq(self.concentration_table)
         self.calib_data, cal_nulls = self._replace(self.calib_data,
                                                    to_replace=[np.nan, 0],
                                                    value="NA", axis="row",
                                                    drop=True)
+        # log the removed rows from concentrations table
         if not conc_nulls.empty:
             self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls.T}")
+        # log the removed rows from calibration table
         if not cal_nulls.empty:
             self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
+        # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
         removed_loq = []
+        # clean up loq table
         for idx in self.loq_table.index:
             if (self.loq_table.loc[idx, :] == "<LLOQ").all() or (self.loq_table.loc[idx, :] == ">ULOQ").all():
                 removed_loq.append(self.loq_table.loc[idx, :])
@@ -328,8 +365,10 @@ class Extractor:
         if removed_loq:
             self.logger.info(f"\nSome metabolite data are all outside the limit of quantification:"
                              f"\n{pd.concat(removed_loq, axis=1).T}\n")
+        # sort the loq table columns naturally
         new_loq_cols = natsorted(self.loq_table.columns)
         self.loq_table = self.loq_table[new_loq_cols]
+        # Add to export lists
         self.excel_tables.append(
             ("Concentrations", self.concentration_table),
         )
