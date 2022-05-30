@@ -10,7 +10,7 @@ from typing import Any
 
 class Extractor:
 
-    def __init__(self, data_path, calrep_path=None, met_class="CM"):
+    def __init__(self, data, calrep=None, metadata=None, met_class="CM"):
 
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
@@ -24,6 +24,7 @@ class Extractor:
         self.loq_table = None
         self.missing_cal_points = None
         self.concentration_table = None
+
         self.stream = io.StringIO()
         handle = logging.StreamHandler(self.stream)
         handle.setLevel(logging.INFO)
@@ -31,14 +32,31 @@ class Extractor:
         self.logger.addHandler(handle)
         self.logger.setLevel(logging.INFO)
 
+        # List to keep the different generated tables
         self.excel_tables = []
 
-        self.data = Extractor._read_data(data_path)
-        if calrep_path is None:
+        self.data = Extractor._read_data(data)
+        if calrep is None:
             self.calrep = None
         else:
-            self.calrep = Extractor._read_data(calrep_path)
+            self.calrep = Extractor._read_data(calrep)
+        if metadata is None:
+            self.metadata = None
+        else:
+            self.metadata = Extractor._read_data(metadata)
+
         self.data["Sample_Name"] = self.data["Filename"]
+
+        # If metadata file is given, check that the sample names are the same as in the data
+        if self.metadata is not None:
+            if natsorted(list(self.metadata.Sample_Name)) != natsorted(list(self.data.Sample_Name.unique())):
+                raise ValueError("The Sample names in the data and metadata do not correspond. Please check them and "
+                                 "try again.")
+
+            self.metadata.set_index("Sample_Name", inplace=True)
+            print(self.metadata)
+            self._check_metadata_columns()
+
         self.data.drop("Filename", axis=1, inplace=True)
         columns = ["Compound", "Sample_Name", "Area", "Sample Type", "Calculated Amt", "Theoretical Amt",
                    "Response Ratio", "Excluded", "%Diff"]
@@ -49,23 +67,45 @@ class Extractor:
 
         self.met_class = met_class
 
-    def generate_metadata(self, fmt: str) -> None:
+    def _check_metadata_columns(self):
+        """
+        Perform checks on the headers in the metadata file
+        :return:
+        """
+
+        for col in ["Resuspension_Volume", "Volume_Unit"]:
+            if col not in self.metadata.columns:
+                raise ValueError(f"{col} is missing from the metadata file columns")
+        if len(self.metadata.columns) > 2:
+            col_nums = []
+            number_cols = int((len(self.metadata.columns) - 2) / 2)
+            for x in range(1, number_cols + 1):
+                col_nums += 2 * [x]
+            for idx, (num, col) in enumerate(zip(col_nums, self.metadata.columns[2:])):
+                if idx % 2 == 0:
+                    if col != f"Norm{num}":
+                        raise ValueError(f'The column "{col}" is not right format. Expected format: "Norm{num}"')
+                else:
+                    if col != f"Norm{num}_Unit":
+                        raise ValueError(f'The column "{col}" is not right format. Expected format: "Norm{num}_Unit"')
+
+    def generate_metadata(self, nb_norms: int = 1) -> pd.DataFrame:
         """
         Generate metadata file from input data.
 
-        :param fmt: export format
-        :return: None
+        :return: Dataframe containing metadata
         """
 
-        metadata = pd.DataFrame(columns=["Filename", "Sample_Name"])
-        metadata["Filename"] = natsorted(self.data["Filename"].unique())
-        metadata["Sample_name"] = "Collaborator Sample Name"
-        if fmt == "excel":
-            metadata.to_excel(r"Sample_List.xlsx", index=False)
-        elif fmt == "csv":
-            metadata.to_csv("Sample_List.xlsx", index=False)
-        else:
-            raise ValueError("Requested format is not recognized")
+        if nb_norms < 0 or isinstance(nb_norms, float):
+            raise ValueError("Normalisation number must be a positive integer")
+        cols = ["Resuspension_Volume", "Volume_Unit"]
+        for i in range(1, nb_norms+1):
+            cols.append(f"Norm{i}")
+            cols.append(f"Norm{i}_Unit")
+        metadata = pd.DataFrame(columns=cols)
+        metadata["Sample_Name"] = natsorted(self.data["Sample_Name"].unique())
+        metadata.set_index("Sample_Name", inplace=True)
+        return metadata
 
     @staticmethod
     def _read_data(path: str) -> pd.DataFrame:
@@ -158,12 +198,14 @@ class Extractor:
         :return: None
         """
 
+        # Isolate the C12 data from the internal standard (C13)
         min_max_calib = self.calib_data[~self.calib_data["Compound"].str.contains("C13")]
         min_max_calib = min_max_calib.sort_values(["Compound", "Sample_Name"],
                                                   key=lambda x: np.argsort(
                                                       index_natsorted(zip(min_max_calib["Compound"],
                                                                           min_max_calib["Sample_Name"]))
                                                   ))
+        # Pivot and add the min and max columns
         min_max_calib = min_max_calib.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
         min_max_calib = min_max_calib.reindex(columns=natsorted(min_max_calib.columns))
         min_max_calib["min"] = min_max_calib.apply(Extractor.get_min, axis=1)
