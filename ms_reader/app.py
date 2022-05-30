@@ -27,6 +27,11 @@ def check_uptodate():
 
 @st.cache
 def convert_df(df):
+    """
+    Convert dataframe to excel file stored in RAM and return it (for the download button widget)
+    :param df: Dataframe containing data
+    :return: Bytes containing the entire contents of the buffer
+    """
     buffer = BytesIO()
     df.to_excel(buffer)
     return buffer.getvalue()
