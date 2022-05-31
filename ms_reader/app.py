@@ -24,7 +24,6 @@ def check_uptodate():
     except Exception:
         pass
 
-
 @st.cache
 def convert_df(df):
     """
@@ -41,6 +40,7 @@ st.set_page_config(page_title=f"MS_Reader (v{__version__})")
 st.title(f"Welcome to MS_Reader (v{__version__})")
 check_uptodate()
 
+st.subheader("Select input files")
 col1, col2, col3 = st.columns(3)
 with col1:
     data = st.file_uploader("Upload Data")
@@ -49,7 +49,7 @@ with col2:
 with col3:
     metadata = st.file_uploader("Upload Metadata (optional)")
 qc_type = st.selectbox(
-    "Choose molecular type",
+    "Choose molecular type (for quality control)",
     ["--", "Central Metabolites", "Amino Acids", "Coenzymes A"]
 )
 excel_engine = "openpyxl"
@@ -82,23 +82,6 @@ if data:
 
     ms_reader = Extractor(data, report, metadata, qc_type)
 
-    if metadata is None:
-        number_norms = st.number_input(
-            label="Normalisations",
-            min_value=1,
-            max_value=10,
-            value=1,
-            help="Select a number of normalisations columns for the metadata file"
-        )
-
-        st.download_button(
-            label="Generate Metadata",
-            data=convert_df(ms_reader.generate_metadata(number_norms)),
-            file_name="Metadata.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Generate metadata with a number of normalisation columns equal to the number entered above"
-        )
-
     if qc_type is not None:
         qc_result = ms_reader.handle_qc()
         if not qc_result:
@@ -107,6 +90,26 @@ if data:
         else:
             st.subheader("QC is valid:")
             st.write(ms_reader.qc_table)
+
+    if metadata is None:
+        number_norms = st.number_input(
+            label="Normalisations",
+            min_value=1,
+            max_value=10,
+            value=1,
+            help="Select a number of normalisations columns for the metadata file"
+        )
+        st.download_button(
+            label="Generate Metadata",
+            data=convert_df(ms_reader.generate_metadata(number_norms)),
+            file_name="Metadata.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Generate metadata with a number of normalisation columns equal to the number entered above"
+        )
+    else:
+        # st.info("Normalisation will be applied following the given metadata file:")
+        with st.expander("Normalisation will be applied following the given metadata file (click to display)"):
+            st.dataframe(ms_reader.metadata)
 
     st.subheader("Choose tables to output")
 
@@ -126,7 +129,11 @@ if data:
         with cln5:
             lloq_box = st.checkbox("LLoQ", key="lloq_box")
 
-        concentration_unit = st.text_input("Input the concentration unit")
+        concentration_unit = st.text_input(
+            label="Input the concentration unit" if ms_reader.metadata is None else "Input the quantity unit",
+            value="µM" if ms_reader.metadata is None else "µmol"
+        )
+
         destination = st.text_input("Input destination path for excel files")
         preview = st.form_submit_button("Preview")
         submit_export = st.form_submit_button("Export selection")
@@ -161,17 +168,23 @@ if data:
         ms_reader.generate_concentrations_table(lloq_box)
         if conc_box:
             if preview:
-                with st.expander("Show concentrations (no lloq)"):
-                    st.dataframe(ms_reader.concentration_table.apply(
-                        lambda x: x.astype(str)
-                    ))
+                if ms_reader.metadata is None:
+                    with st.expander("Show concentrations (no lloq)"):
+                        st.dataframe(ms_reader.concentration_table.apply(
+                            lambda x: x.astype(str)
+                        ))
+                else:
+                    with st.expander("Show concentrations (no lloq)"):
+                        st.dataframe(ms_reader.normalised_concentrations.apply(
+                            lambda x: x.astype(str)
+                        ))
         if lloq_box:
             if preview:
                 with st.expander("Show concentrations (with lloq)"):
                     st.dataframe(ms_reader.loq_table.astype(str))
     if submit_export:
         ms_reader.export_final_excel(destination)
-        st.text("The final excel has been generated")
+        st.success("The final excel has been generated")
     if submit_stat_out:
         ms_reader.export_stat_output(destination, concentration_unit)
-        st.text("The output for the stat object has been generated")
+        st.success("The output for the stat object has been generated")

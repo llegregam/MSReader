@@ -55,6 +55,7 @@ class Extractor:
 
             self.metadata.set_index("Sample_Name", inplace=True)
             self._check_metadata_columns()
+            self.excel_tables.append(("Metadata", self.metadata))
 
         self.data.drop("Filename", axis=1, inplace=True)
         columns = ["Compound", "Sample_Name", "Area", "Sample Type", "Calculated Amt", "Theoretical Amt",
@@ -103,7 +104,8 @@ class Extractor:
                 lambda s: pd.to_numeric(s, errors="raise")
             )
         except ValueError:
-            raise TypeError("Error while converting to numeric values. Are you sure your metadata file contains only numbers?")
+            raise TypeError("Error while converting to numeric values. Are you sure your metadata file contains only "
+                            "numbers?")
         except Exception:
             raise RuntimeError("Unknown error while converting to numeric values.")
         else:
@@ -125,12 +127,13 @@ class Extractor:
         if nb_norms < 0 or isinstance(nb_norms, float):
             raise ValueError("Normalisation number must be a positive integer")
         cols = ["Resuspension_Volume", "Volume_Unit"]
-        for i in range(1, nb_norms+1):
+        for i in range(1, nb_norms + 1):
             cols.append(f"Norm{i}")
             cols.append(f"Norm{i}_Unit")
         metadata = pd.DataFrame(columns=cols)
         metadata["Sample_Name"] = natsorted(self.data["Sample_Name"].unique())
         metadata.set_index("Sample_Name", inplace=True)
+        metadata["Volume_Unit"] = "L"
         return metadata
 
     @staticmethod
@@ -313,49 +316,25 @@ class Extractor:
     def _color_concentrations(self):
         pass
 
-    def normalise_concentrations(self, df):
-
+    def normalise(self, df):
+        """
+        Normalise concentrations by multiplying by volume and dividing by norms
+        :param df: dataframe to normalise
+        :return:
+        """
+        # TODO: Multiplier par le volume pour avoir la quantité, ensuite diviser par les norms
         df = df.apply(
             lambda s: pd.to_numeric(s, errors="raise")
         )
 
-        for norm in self.md_values.columns:
-            for col in df.columns:
+        for col in df.columns:
+            df[col] = df[col].multiply(self.md_values.at[col, "Resuspension_Volume"])
+            for norm in self.md_values.columns[1:]:
                 df[col] = df[col].divide(self.md_values.at[col, norm])
         return df
 
+    def _clean_loq_table(self):
 
-    def generate_concentrations_table(self, loq_export):
-
-        # Isolate the C12 data
-        concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
-        # transpose the data
-        concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
-        # Replace nans and nulls with "NA"
-        concentrations, conc_nulls = self._replace(concentrations,
-                                                   to_replace=[np.nan, 0],
-                                                   value="NA", axis="row",
-                                                   drop=True)
-        self.concentration_table = concentrations.copy()
-        # If metadata detected, normalise the concentrations and do loq, else only do loq
-        if self.metadata is not None:
-            self.normalised_concentrations = self.normalise_concentrations(self.concentration_table)
-            self.loq_table = self._define_loq(self.normalised_concentrations.copy())
-        else:
-            self.loq_table = self._define_loq(self.concentration_table)
-        self.calib_data, cal_nulls = self._replace(self.calib_data,
-                                                   to_replace=[np.nan, 0],
-                                                   value="NA", axis="row",
-                                                   drop=True)
-        # log the removed rows from concentrations table
-        if not conc_nulls.empty:
-            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls.T}")
-        # log the removed rows from calibration table
-        if not cal_nulls.empty:
-            self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
-        # sort the columns naturally
-        new_cols = natsorted(self.concentration_table.columns)
-        self.concentration_table = self.concentration_table[new_cols]
         removed_loq = []
         # clean up loq table
         for idx in self.loq_table.index:
@@ -368,14 +347,83 @@ class Extractor:
         # sort the loq table columns naturally
         new_loq_cols = natsorted(self.loq_table.columns)
         self.loq_table = self.loq_table[new_loq_cols]
+
+    def _generate_normalised_concentrations(self, unit, columns):
+
+        #TODO: ask how to handle normalisation with LLOQ and ULOQ
+
+        self.normalised_concentrations = self.normalise(self.concentration_table)
+        # sort the columns naturally
+        self.normalised_concentrations = self.normalised_concentrations[columns]
+        # define loqs
+        self.loq_table = self._define_loq(self.normalised_concentrations.copy())
+        self._clean_loq_table()
+        # add unit column
+        concunits = [x for x in self.md_units.iloc[0, 1:]]
+        concunits.insert(0, unit)
+        self.normalised_concentrations["unit"] = "/".join(concunits)
+        self.loq_table["unit"] = "/".join(concunits)
+        columns.insert(0, "unit")
+        self.normalised_concentrations = self.normalised_concentrations[columns]
+        self.loq_table = self.loq_table[columns]
+
+    def generate_concentrations_table(self, loq_export, unit="µmol"):
+
+        # Isolate the C12 data
+        concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
+        # transpose the data
+        concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
+        # Replace nans and nulls with "NA"
+        concentrations, conc_nulls = self._replace(concentrations,
+                                                   to_replace=[np.nan, 0],
+                                                   value="NA", axis="row",
+                                                   drop=True)
+        self.concentration_table = concentrations.copy()
+        # sort the columns naturally
+        new_cols = natsorted(self.concentration_table.columns)
+        self.concentration_table = self.concentration_table[new_cols]
+        # If metadata detected, normalise the concentrations and do loq, else only do loq
+        if self.metadata is not None:
+            self._generate_normalised_concentrations(unit, new_cols)
+        else:
+            self.loq_table = self._define_loq(self.concentration_table)
+            self._clean_loq_table()
+            # add unit column
+            new_cols.insert(0, "unit")
+            self.concentration_table["unit"] = unit
+            self.loq_table["unit"] = unit
+            self.concentration_table, self.loq_table = self.concentration_table[new_cols], self.loq_table[new_cols]
+
+        self.calib_data, cal_nulls = self._replace(self.calib_data,
+                                                   to_replace=[np.nan, 0],
+                                                   value="NA", axis="row",
+                                                   drop=True)
+
+        # log the removed rows from concentrations table
+        if not conc_nulls.empty:
+            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls.T}")
+        # log the removed rows from calibration table
+        if not cal_nulls.empty:
+            self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
+
         # Add to export lists
-        self.excel_tables.append(
-            ("Concentrations", self.concentration_table),
-        )
-        if loq_export:
+        if self.metadata is not None:
             self.excel_tables.append(
-                ("Concentrations_LLOQ", self.loq_table)
+                ("Normalised_Concentrations", self.concentration_table),
             )
+        else:
+            self.excel_tables.append(
+                ("Concentrations", self.concentration_table),
+            )
+        if loq_export:
+            if self.metadata is not None:
+                self.excel_tables.append(
+                    ("Normalised_Concentrations_LLOQ", self.loq_table)
+                )
+            else:
+                self.excel_tables.append(
+                    ("Concentrations_LLOQ", self.loq_table)
+                )
 
     def get_ratios(self):
 
@@ -440,8 +488,9 @@ class Extractor:
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound", "Sample_Name")
         self.ratios, removed_ratios = self._replace(self.ratios, [0, np.inf, np.nan], "NA", "row", True)
         if not removed_ratios.empty:
-            self.logger.info(f"\nSome rows were removed from the ratios dataframe because they contained only infinites,"
-                             f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
+            self.logger.info(
+                f"\nSome rows were removed from the ratios dataframe because they contained only infinites,"
+                f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
         new_cols = natsorted(self.ratios.columns)
         self.ratios = self.ratios[new_cols]
         self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
@@ -485,9 +534,6 @@ class Extractor:
             loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask, other="<LLOQ")
             loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
         return loq_table
-
-    def normalise(self, factor, unit):
-        pass
 
     @staticmethod
     def _color_qc(col):
