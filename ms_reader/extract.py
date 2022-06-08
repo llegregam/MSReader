@@ -12,6 +12,7 @@ class Extractor:
 
     def __init__(self, data, calrep=None, metadata=None, met_class="CM"):
 
+        self.qc_table = None
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
         self.c13_areas = None
@@ -136,6 +137,7 @@ class Extractor:
         metadata["Volume_Unit"] = "L"
         return metadata
 
+    # noinspection PyArgumentList
     @staticmethod
     def _read_data(path: str) -> pd.DataFrame:
         """
@@ -304,6 +306,13 @@ class Extractor:
                 self.logger.info(f"\n{self.excluded_c13_areas}")
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
+        # TODO: Should areas be normalised?
+        # if self.metadata is not None:
+        #     self.c12_areas = self.normalise(self.c12_areas)
+        #     self.c13_areas = self.normalise(self.c13_areas)
+        #     concunits = [x for x in self.md_units.iloc[0, 1:]]
+        #     concunits.insert(0, "C")
+        #     self.normalised_concentrations["unit"] = "/".join(concunits)
         self.c12_areas = self.c12_areas[c12_cols]
         self.c13_areas = self.c13_areas[c13_cols]
         self.excel_tables.append(
@@ -322,7 +331,7 @@ class Extractor:
         :param df: dataframe to normalise
         :return:
         """
-        # TODO: Multiplier par le volume pour avoir la quantité, ensuite diviser par les norms
+
         df = df.apply(
             lambda s: pd.to_numeric(s, errors="raise")
         )
@@ -350,13 +359,16 @@ class Extractor:
 
     def _generate_normalised_concentrations(self, unit, columns):
 
-        #TODO: ask how to handle normalisation with LLOQ and ULOQ
-
         self.normalised_concentrations = self.normalise(self.concentration_table)
         # sort the columns naturally
         self.normalised_concentrations = self.normalised_concentrations[columns]
         # define loqs
-        self.loq_table = self._define_loq(self.normalised_concentrations.copy())
+        self.loq_table = self.normalised_concentrations.copy()
+        for idx in self.loq_table.index:
+            lloq_mask = self.concentration_table.loc[idx, :].apply(lambda x: float(x) < self.calib_data.at[idx, "min"])
+            uloq_mask = self.concentration_table.loc[idx, :].apply(lambda x: float(x) > self.calib_data.at[idx, "max"])
+            self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~lloq_mask, other="<LLOQ")
+            self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
         self._clean_loq_table()
         # add unit column
         concunits = [x for x in self.md_units.iloc[0, 1:]]
@@ -436,7 +448,7 @@ class Extractor:
         if missing_c13_std:
             self.logger.info(f"Metabolites missing from IDMS: \n{missing_c13_std}")
         else:
-            self.logger.info("All mMetabolites are presentin the IDMS")
+            self.logger.info("All metabolites are present in the IDMS")
 
         # Drop missing compounds from c12 df
         c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
@@ -489,13 +501,23 @@ class Extractor:
         self.ratios, removed_ratios = self._replace(self.ratios, [0, np.inf, np.nan], "NA", "row", True)
         if not removed_ratios.empty:
             self.logger.info(
-                f"\nSome rows were removed from the ratios dataframe because they contained only infinites,"
+                f"\nSome rows were removed from the ratios dataframe because they contained only infinities,"
                 f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
-        new_cols = natsorted(self.ratios.columns)
+        if self.metadata is not None:
+            name = "Normalised_Ratios"
+            self.ratios = self.normalise(self.ratios)
+            concunits = [x for x in self.md_units.iloc[0, 1:]]
+            concunits.insert(0, "C12/C13")
+            new_cols = natsorted(self.ratios.columns)
+            self.ratios["unit"] = "/".join(concunits)
+            new_cols.insert(0, "unit")
+        else:
+            name = "Ratios"
+            new_cols = natsorted(self.ratios.columns)
         self.ratios = self.ratios[new_cols]
         self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
         self.excel_tables.append(
-            ("Ratios", self.ratios)
+            (name, self.ratios)
         )
 
     @staticmethod
@@ -527,7 +549,12 @@ class Extractor:
         return df, null_data
 
     def _define_loq(self, loq_table):
-
+        """
+        Define a mask for <LLOQ and >ULOQ and apply the strings at the right places. Have option to just return the
+        masks.
+        :param loq_table: table to apply LOQs to
+        :return: loq_table or masks to apply for loq table
+        """
         for idx in loq_table.index:
             lloq_mask = loq_table.loc[idx, :].apply(lambda x: float(x) < self.calib_data.at[idx, "min"])
             uloq_mask = loq_table.loc[idx, :].apply(lambda x: float(x) > self.calib_data.at[idx, "max"])
@@ -611,10 +638,14 @@ class Extractor:
 
         """
 
-        Homemade replace function :param df: dataframe in which to replace values :param to_replace: value(s) to
-        replace :param value: value to replace with :param axis: axis on which to apply the method (can be whole
-        dataframe) :param drop: should row or column be dropped if the replacing value take the whole axis (only for
-        axis=row or column) :return: replaced dataframe and removed axes if drop=True
+        Homemade replace function
+
+        :param df: dataframe in which to replace values
+        :param to_replace: value(s) to replace
+        :param value: value to replace with
+        :param axis: axis on which to apply the method (can be whole dataframe)
+        :param drop: should row or column be dropped if the replacing value take the whole axis (only for axis=row or column)
+        :return: replaced dataframe and removed axes if drop=True
 
         """
 
