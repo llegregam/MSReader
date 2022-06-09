@@ -1,3 +1,5 @@
+"""Module containing the parser for tracefinder data and handling all the logic of MS_Reader"""
+
 from pathlib import Path
 import logging
 import io
@@ -43,8 +45,10 @@ class Extractor:
             self.calrep = Extractor._read_data(calrep)
         if metadata is None:
             self.metadata = None
+            self.unit = "µM" # Default unit, no metadata is present so no normalisation (expressed in concentration)
         else:
             self.metadata = Extractor._read_data(metadata)
+            self.unit = "µmol" # Default unit, if metadata is present data is normalised (expressed in quantities)
 
         self.data["Sample_Name"] = self.data["Filename"]
 
@@ -67,6 +71,37 @@ class Extractor:
         self._get_excluded()
 
         self.met_class = met_class
+
+    @property
+    def concunits(self):
+
+        if hasattr(self, "_concunits"):
+            return self._concunits
+        elif self.md_units is not None:
+            _concunits = [x for x in self.md_units.iloc[0, 1:]]
+            _concunits.insert(0, self.unit)
+            self._concunits = "/".join(_concunits)
+            return self._concunits
+        else:
+            raise AttributeError(
+                f"The metadata has not been loaded in properly. Cannot parse units from file. "
+                f"Metadata={self.metadata}"
+            )
+
+    @property
+    def unit(self):
+        return self._unit
+
+    @unit.setter
+    def unit(self, unit):
+
+        try:
+            if unit != self._unit:
+                self._unit = unit
+                del self._concunits
+        except AttributeError:
+            self._unit = unit
+
 
     def _check_metadata_columns(self):
         """
@@ -253,7 +288,7 @@ class Extractor:
         """
         self._generate_minmax_calib()
 
-    def handle_qc(self):
+    def handle_qc(self) -> bool:
         """
         Get run quality control. If False the run is invalidated.
         :return: Quality control (bool)
@@ -268,12 +303,15 @@ class Extractor:
             raise KeyError("The selected metabolite class is not valid. Valid classes are CM for Central Metabolites, "
                            "AA for Amino Acids and CoA for Coenzymes A")
 
+        # Replace commas with dots and convert columns to numeric
         for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
             qc_verif[col] = qc_verif[col].apply(lambda x: str(x).replace(",", "."))
             qc_verif[col] = pd.to_numeric(qc_verif[col], errors="coerce")
 
         self.qc_table = qc_verif[["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
         self.qc_table.set_index("Compound", inplace=True)
+
+        # QC is set to have a difference between sample point and QC of 20% maximum
         if (abs(qc_verif["%Diff"].values) > 20).any():
             qc = False
         else:
@@ -286,24 +324,34 @@ class Extractor:
         return qc
 
     def generate_areas_table(self):
+        """
+        Generate the 12C and 13C area tables by separating them from the rest of the data and formatting
+        :return: None
+        """
 
+        # separate 12C and 13C sample data
         c12 = self.sample_data[~self.sample_data["Compound"].str.contains("C13")].copy()
         c13 = self.sample_data[self.sample_data["Compound"].str.contains("C13")].copy()
 
         c12_areas = pd.pivot_table(c12, "Area", "Compound", "Sample_Name")
         c13_areas = pd.pivot_table(c13, "Area", "Compound", "Sample_Name")
 
+        # get rid of rows where all data points are excluded
         self.c12_areas = c12_areas[~c12_areas.isin(["Excluded"]).all(axis=1)]
         self.c13_areas = c13_areas[~c13_areas.isin(["Excluded"]).all(axis=1)]
 
         self.excluded_c12_areas = c12_areas[c12_areas.isin(["Excluded"]).all(axis=1)]
         self.excluded_c13_areas = c13_areas[c13_areas.isin(["Excluded"]).all(axis=1)]
+
+        # log the excluded
         if not self.excluded_c12_areas.empty or not self.excluded_c13_areas.empty:
             self.logger.info("\nSome metabolites were excluded during area table processing:\n")
             if not self.excluded_c12_areas.empty:
                 self.logger.info(f"\n{self.excluded_c12_areas}")
             if not self.excluded_c12_areas.empty:
                 self.logger.info(f"\n{self.excluded_c13_areas}")
+
+        # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
         # TODO: Should areas be normalised?
@@ -325,7 +373,7 @@ class Extractor:
     def _color_concentrations(self):
         pass
 
-    def normalise(self, df):
+    def normalise(self, df) -> pd.DataFrame:
         """
         Normalise concentrations by multiplying by volume and dividing by norms
         :param df: dataframe to normalise
@@ -343,6 +391,10 @@ class Extractor:
         return df
 
     def _clean_loq_table(self):
+        """
+        Clean up loq table by removing rows where all are out of the given bounds
+        :return: None
+        """
 
         removed_loq = []
         # clean up loq table
@@ -357,7 +409,13 @@ class Extractor:
         new_loq_cols = natsorted(self.loq_table.columns)
         self.loq_table = self.loq_table[new_loq_cols]
 
-    def _generate_normalised_concentrations(self, unit, columns):
+    def _generate_normalised_concentrations(self, columns: list):
+        """
+        Normalise the concentrations and put them into a clean df
+        :param unit: base unit for quantity
+        :param columns: columns to use for sorting the tables
+        :return: None
+        """
 
         self.normalised_concentrations = self.normalise(self.concentration_table)
         # sort the columns naturally
@@ -371,16 +429,15 @@ class Extractor:
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
         self._clean_loq_table()
         # add unit column
-        concunits = [x for x in self.md_units.iloc[0, 1:]]
-        concunits.insert(0, unit)
-        self.normalised_concentrations["unit"] = "/".join(concunits)
-        self.loq_table["unit"] = "/".join(concunits)
+        self.normalised_concentrations["unit"] = self.concunits
+        self.loq_table["unit"] = self.concunits
         columns.insert(0, "unit")
         self.normalised_concentrations = self.normalised_concentrations[columns]
         self.loq_table = self.loq_table[columns]
 
     def generate_concentrations_table(self, loq_export, unit="µmol"):
 
+        self.unit = unit
         # Isolate the C12 data
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
         # transpose the data
@@ -396,14 +453,14 @@ class Extractor:
         self.concentration_table = self.concentration_table[new_cols]
         # If metadata detected, normalise the concentrations and do loq, else only do loq
         if self.metadata is not None:
-            self._generate_normalised_concentrations(unit, new_cols)
+            self._generate_normalised_concentrations(new_cols)
         else:
             self.loq_table = self._define_loq(self.concentration_table)
             self._clean_loq_table()
             # add unit column
             new_cols.insert(0, "unit")
-            self.concentration_table["unit"] = unit
-            self.loq_table["unit"] = unit
+            self.concentration_table["unit"] = self.unit
+            self.loq_table["unit"] = self.unit
             self.concentration_table, self.loq_table = self.concentration_table[new_cols], self.loq_table[new_cols]
 
         self.calib_data, cal_nulls = self._replace(self.calib_data,
@@ -506,14 +563,16 @@ class Extractor:
         if self.metadata is not None:
             name = "Normalised_Ratios"
             self.ratios = self.normalise(self.ratios)
-            concunits = [x for x in self.md_units.iloc[0, 1:]]
-            concunits.insert(0, "C12/C13")
             new_cols = natsorted(self.ratios.columns)
-            self.ratios["unit"] = "/".join(concunits)
+            ratio_unit = ["C12/C13"]
+            ratio_unit.extend([x for x in self.md_units.iloc[0, 1:]])
+            self.ratios["unit"] = "/".join(ratio_unit)
             new_cols.insert(0, "unit")
         else:
             name = "Ratios"
             new_cols = natsorted(self.ratios.columns)
+            self.ratios["unit"] = "C12/C13"
+            new_cols.insert(0, "unit")
         self.ratios = self.ratios[new_cols]
         self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
         self.excel_tables.append(
