@@ -9,6 +9,8 @@ import numpy as np
 from natsort import natsorted, index_natsorted
 from typing import Any
 
+from utils import print_df
+
 
 class Extractor:
 
@@ -27,6 +29,7 @@ class Extractor:
         self.loq_table = None
         self.missing_cal_points = None
         self.concentration_table = None
+        self._concunits = None
 
         self.stream = io.StringIO()
         handle = logging.StreamHandler(self.stream)
@@ -45,10 +48,10 @@ class Extractor:
             self.calrep = Extractor._read_data(calrep)
         if metadata is None:
             self.metadata = None
-            self.unit = "µM" # Default unit, no metadata is present so no normalisation (expressed in concentration)
+            self.unit = "µM"  # Default unit, no metadata is present so no normalisation (expressed in concentration)
         else:
             self.metadata = Extractor._read_data(metadata)
-            self.unit = "µmol" # Default unit, if metadata is present data is normalised (expressed in quantities)
+            self.unit = "µmol"  # Default unit, if metadata is present data is normalised (expressed in quantities)
 
         self.data["Sample_Name"] = self.data["Filename"]
 
@@ -73,13 +76,12 @@ class Extractor:
         self.met_class = met_class
 
     @property
-    def concunits(self):
+    def norm_unit(self):
 
-        if hasattr(self, "_concunits"):
+        if self._concunits is not None:
             return self._concunits
         elif self.md_units is not None:
             _concunits = [x for x in self.md_units.iloc[0, 1:]]
-            _concunits.insert(0, self.unit)
             self._concunits = "/".join(_concunits)
             return self._concunits
         else:
@@ -87,21 +89,6 @@ class Extractor:
                 f"The metadata has not been loaded in properly. Cannot parse units from file. "
                 f"Metadata={self.metadata}"
             )
-
-    @property
-    def unit(self):
-        return self._unit
-
-    @unit.setter
-    def unit(self, unit):
-
-        try:
-            if unit != self._unit:
-                self._unit = unit
-                del self._concunits
-        except AttributeError:
-            self._unit = unit
-
 
     def _check_metadata_columns(self):
         """
@@ -274,8 +261,10 @@ class Extractor:
         # Pivot and add the min and max columns
         min_max_calib = min_max_calib.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
         min_max_calib = min_max_calib.reindex(columns=natsorted(min_max_calib.columns))
-        min_max_calib["min"] = min_max_calib.apply(Extractor.get_min, axis=1)
-        min_max_calib["max"] = min_max_calib.apply(Extractor.get_max, axis=1)
+        self.calibration_minimum = min_max_calib.apply(Extractor.get_min, axis=1)
+        self.calibration_maximum = min_max_calib.apply(Extractor.get_max, axis=1)
+        min_max_calib["min"] = self.calibration_minimum
+        min_max_calib["max"] = self.calibration_maximum
         self.calib_data = min_max_calib
         self.excel_tables.append(
             ("Calibration", self.calib_data)
@@ -354,13 +343,17 @@ class Extractor:
         # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
-        # TODO: Should areas be normalised?
-        # if self.metadata is not None:
-        #     self.c12_areas = self.normalise(self.c12_areas)
-        #     self.c13_areas = self.normalise(self.c13_areas)
-        #     concunits = [x for x in self.md_units.iloc[0, 1:]]
-        #     concunits.insert(0, "C")
-        #     self.normalised_concentrations["unit"] = "/".join(concunits)
+        base_unit = "area"
+        if self.metadata is not None:
+            self.c12_areas = self.normalise(self.c12_areas)
+            self.c13_areas = self.normalise(self.c13_areas)
+            self.c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
+            self.c13_areas["unit"] = f"{base_unit}/{self.norm_unit}"
+        else:
+            self.c12_areas["unit"] = base_unit
+            self.c13_areas["unit"] = base_unit
+        c12_cols.insert(0, "unit")
+        c13_cols.insert(0, "unit")
         self.c12_areas = self.c12_areas[c12_cols]
         self.c13_areas = self.c13_areas[c13_cols]
         self.excel_tables.append(
@@ -409,10 +402,10 @@ class Extractor:
         new_loq_cols = natsorted(self.loq_table.columns)
         self.loq_table = self.loq_table[new_loq_cols]
 
-    def _generate_normalised_concentrations(self, columns: list):
+    def _generate_normalised_concentrations(self, columns: list, base_unit):
         """
         Normalise the concentrations and put them into a clean df
-        :param unit: base unit for quantity
+        :param base_unit: base unit for quantity
         :param columns: columns to use for sorting the tables
         :return: None
         """
@@ -429,38 +422,43 @@ class Extractor:
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
         self._clean_loq_table()
         # add unit column
-        self.normalised_concentrations["unit"] = self.concunits
-        self.loq_table["unit"] = self.concunits
+        self.normalised_concentrations["unit"] = f"{base_unit}/{self.norm_unit}"
+        self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
         columns.insert(0, "unit")
         self.normalised_concentrations = self.normalised_concentrations[columns]
         self.loq_table = self.loq_table[columns]
 
-    def generate_concentrations_table(self, loq_export, unit="µmol"):
+    def generate_concentrations_table(self, loq_export, base_unit=None):
 
-        self.unit = unit
+        if base_unit is None:
+            base_unit = "µmol" if self.metadata is not None else "µM"
+
         # Isolate the C12 data
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
         # transpose the data
-        concentrations = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
+        self.concentration_table = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
         # Replace nans and nulls with "NA"
-        concentrations, conc_nulls = self._replace(concentrations,
-                                                   to_replace=[np.nan, 0],
-                                                   value="NA", axis="row",
-                                                   drop=True)
+        print_df(f"Test concentrations 1: \n{concentrations}")
+        # concentrations, conc_nulls = self._replace(concentrations,
+        #                                            to_replace=[np.nan, 0],
+        #                                            value="NA", axis="row",
+        #                                            drop=True)
+
+        print_df(f"Test concentrations 2: \n{concentrations}")
         self.concentration_table = concentrations.copy()
         # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
         # If metadata detected, normalise the concentrations and do loq, else only do loq
         if self.metadata is not None:
-            self._generate_normalised_concentrations(new_cols)
+            self._generate_normalised_concentrations(new_cols, base_unit)
         else:
             self.loq_table = self._define_loq(self.concentration_table)
             self._clean_loq_table()
             # add unit column
             new_cols.insert(0, "unit")
-            self.concentration_table["unit"] = self.unit
-            self.loq_table["unit"] = self.unit
+            self.concentration_table["unit"] = base_unit
+            self.loq_table["unit"] = base_unit
             self.concentration_table, self.loq_table = self.concentration_table[new_cols], self.loq_table[new_cols]
 
         self.calib_data, cal_nulls = self._replace(self.calib_data,
@@ -560,19 +558,16 @@ class Extractor:
             self.logger.info(
                 f"\nSome rows were removed from the ratios dataframe because they contained only infinities,"
                 f"zeroes or NaNs.\nRemoved rows:\n{removed_ratios}")
+        base_unit = "12C/13C"
+        new_cols = natsorted(self.ratios.columns)
+        new_cols.insert(0, "unit")
         if self.metadata is not None:
             name = "Normalised_Ratios"
             self.ratios = self.normalise(self.ratios)
-            new_cols = natsorted(self.ratios.columns)
-            ratio_unit = ["C12/C13"]
-            ratio_unit.extend([x for x in self.md_units.iloc[0, 1:]])
-            self.ratios["unit"] = "/".join(ratio_unit)
-            new_cols.insert(0, "unit")
+            self.ratios["unit"] = f"{base_unit}/{self.norm_unit}"
         else:
             name = "Ratios"
-            new_cols = natsorted(self.ratios.columns)
-            self.ratios["unit"] = "C12/C13"
-            new_cols.insert(0, "unit")
+            self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
         self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
         self.excel_tables.append(
@@ -703,7 +698,8 @@ class Extractor:
         :param to_replace: value(s) to replace
         :param value: value to replace with
         :param axis: axis on which to apply the method (can be whole dataframe)
-        :param drop: should row or column be dropped if the replacing value take the whole axis (only for axis=row or column)
+        :param drop: should row or column be dropped if the replacing value take the whole axis
+                    (only for axis=row or column)
         :return: replaced dataframe and removed axes if drop=True
 
         """
@@ -721,6 +717,7 @@ class Extractor:
                     for idx in df.index:
                         if (df.loc[idx, :].isin(to_replace)).all():
                             if drop:
+                                df.loc[idx, :] = value
                                 removed.append(df.loc[idx, :])
                                 df = df.drop(idx)
                             else:
@@ -729,6 +726,7 @@ class Extractor:
                     for col in df.columns:
                         if (df.loc[:, col].isin(to_replace)).all():
                             if drop:
+                                df.loc[:, col] = value
                                 removed.append(df.loc[:, col])
                                 df = df.drop(col, axis=1)
                             else:
