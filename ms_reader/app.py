@@ -140,7 +140,7 @@ if data:
         submit_stat_out = st.form_submit_button("Export stat output")
 
     ms_reader.handle_calibration()
-
+    df_format = lambda x: x.astype(str)
     if report_box:
         ms_reader.generate_report()
         if preview:
@@ -150,12 +150,12 @@ if data:
         ms_reader.generate_areas_table()
         if preview:
             with st.expander("Show C12 Areas"):
-                st.dataframe(ms_reader.c12_areas)
+                st.dataframe(ms_reader.c12_areas.apply(df_format))
                 if not ms_reader.excluded_c12_areas.empty:
                     st.write(f"Some metabolites were excluded:")
                     st.dataframe(ms_reader.excluded_c12_areas)
             with st.expander("Show C13 Areas"):
-                st.dataframe(ms_reader.c13_areas)
+                st.dataframe(ms_reader.c13_areas.apply(df_format))
                 if not ms_reader.excluded_c13_areas.empty:
                     st.write(f"Some metabolites were excluded:")
                     st.dataframe(ms_reader.excluded_c13_areas)
@@ -163,21 +163,17 @@ if data:
         ms_reader.get_ratios()
         if preview:
             with st.expander("Show Ratios"):
-                st.dataframe(ms_reader.ratios)
+                st.dataframe(ms_reader.ratios.apply(df_format))
     if conc_box or lloq_box:
         ms_reader.generate_concentrations_table(lloq_box)
         if conc_box:
             if preview:
                 if ms_reader.metadata is None:
                     with st.expander("Show concentrations (no lloq)"):
-                        st.dataframe(ms_reader.concentration_table.apply(
-                            lambda x: x.astype(str)
-                        ))
+                        st.dataframe(ms_reader.concentration_table.apply(df_format))
                 else:
                     with st.expander("Show concentrations (no lloq)"):
-                        st.dataframe(ms_reader.normalised_concentrations.apply(
-                            lambda x: x.astype(str)
-                        ))
+                        st.dataframe(ms_reader.normalised_concentrations.apply(df_format))
         if lloq_box:
             if preview:
                 with st.expander("Show concentrations (with lloq)"):
@@ -186,5 +182,5 @@ if data:
         ms_reader.export_final_excel(destination)
         st.success("The final excel has been generated")
     if submit_stat_out:
-        ms_reader.export_stat_output(destination, concentration_unit)
+        ms_reader.export_stat_output(destination)
         st.success("The output for the stat object has been generated")

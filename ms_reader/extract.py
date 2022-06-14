@@ -9,13 +9,14 @@ import numpy as np
 from natsort import natsorted, index_natsorted
 from typing import Any
 
-from utils import print_df
+from utils import print_df, format
 
 
 class Extractor:
 
     def __init__(self, data, calrep=None, metadata=None, met_class="CM"):
 
+        self.normalised_concentrations = None
         self.qc_table = None
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
@@ -25,7 +26,7 @@ class Extractor:
         self.no_ratio = None
         self.cal_nulls = None
         self.calib_data = None
-        self.conc_nulls = None
+        self.calib_nulls = None
         self.loq_table = None
         self.missing_cal_points = None
         self.concentration_table = None
@@ -276,6 +277,12 @@ class Extractor:
         :return: None
         """
         self._generate_minmax_calib()
+        self.calib_data, self.calib_nulls = self._replace(self.calib_data,
+                                                          to_replace=[np.nan, 0],
+                                                          value="NA", axis="row",
+                                                          drop=True)
+        if not self.calib_nulls.empty:
+            self.logger.info(f"\nRows removed from the calibration table:\n{self.calib_nulls.T}")
 
     def handle_qc(self) -> bool:
         """
@@ -332,14 +339,6 @@ class Extractor:
         self.excluded_c12_areas = c12_areas[c12_areas.isin(["Excluded"]).all(axis=1)]
         self.excluded_c13_areas = c13_areas[c13_areas.isin(["Excluded"]).all(axis=1)]
 
-        # log the excluded
-        if not self.excluded_c12_areas.empty or not self.excluded_c13_areas.empty:
-            self.logger.info("\nSome metabolites were excluded during area table processing:\n")
-            if not self.excluded_c12_areas.empty:
-                self.logger.info(f"\n{self.excluded_c12_areas}")
-            if not self.excluded_c12_areas.empty:
-                self.logger.info(f"\n{self.excluded_c13_areas}")
-
         # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
@@ -347,9 +346,13 @@ class Extractor:
         if self.metadata is not None:
             self.c12_areas = self.normalise(self.c12_areas)
             self.c13_areas = self.normalise(self.c13_areas)
+            self.c12_areas = self.c12_areas.applymap(format)
+            self.c13_areas = self.c13_areas.applymap(format)
             self.c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.c13_areas["unit"] = f"{base_unit}/{self.norm_unit}"
         else:
+            self.c12_areas = self.c12_areas.applymap(format)
+            self.c13_areas = self.c13_areas.applymap(format)
             self.c12_areas["unit"] = base_unit
             self.c13_areas["unit"] = base_unit
         c12_cols.insert(0, "unit")
@@ -383,34 +386,27 @@ class Extractor:
                 df[col] = df[col].divide(self.md_values.at[col, norm])
         return df
 
-    def _clean_loq_table(self):
-        """
-        Clean up loq table by removing rows where all are out of the given bounds
-        :return: None
-        """
+    # def _clean_loq_table(self):
+    #     """
+    #     Clean up loq table by removing rows where we have no calibration data
+    #     :return: None
+    #     """
+    #
+    #     to_drop = list(self.calib_nulls.index.values)
+    #     self.loq_table = self.loq_table.drop(index=to_drop)
+    #
+    #     # sort the loq table columns naturally
+    #     new_loq_cols = natsorted(self.loq_table.columns)
+    #     self.loq_table = self.loq_table[new_loq_cols]
 
-        removed_loq = []
-        # clean up loq table
-        for idx in self.loq_table.index:
-            if (self.loq_table.loc[idx, :] == "<LLOQ").all() or (self.loq_table.loc[idx, :] == ">ULOQ").all():
-                removed_loq.append(self.loq_table.loc[idx, :])
-                self.loq_table.drop(idx, inplace=True)
-        if removed_loq:
-            self.logger.info(f"\nSome metabolite data are all outside the limit of quantification:"
-                             f"\n{pd.concat(removed_loq, axis=1).T}\n")
-        # sort the loq table columns naturally
-        new_loq_cols = natsorted(self.loq_table.columns)
-        self.loq_table = self.loq_table[new_loq_cols]
-
-    def _generate_normalised_concentrations(self, columns: list, base_unit):
+    def _generate_normalised_concentrations(self, columns: list):
         """
-        Normalise the concentrations and put them into a clean df
-        :param base_unit: base unit for quantity
+        Normalise the concentrations and put them into a clean df. Also generate loq_table
         :param columns: columns to use for sorting the tables
         :return: None
         """
 
-        self.normalised_concentrations = self.normalise(self.concentration_table)
+        self.normalised_concentrations = self.normalise(self.concentration_table.copy())
         # sort the columns naturally
         self.normalised_concentrations = self.normalised_concentrations[columns]
         # define loqs
@@ -420,13 +416,6 @@ class Extractor:
             uloq_mask = self.concentration_table.loc[idx, :].apply(lambda x: float(x) > self.calib_data.at[idx, "max"])
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~lloq_mask, other="<LLOQ")
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(~uloq_mask, other=">ULOQ")
-        self._clean_loq_table()
-        # add unit column
-        self.normalised_concentrations["unit"] = f"{base_unit}/{self.norm_unit}"
-        self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
-        columns.insert(0, "unit")
-        self.normalised_concentrations = self.normalised_concentrations[columns]
-        self.loq_table = self.loq_table[columns]
 
     def generate_concentrations_table(self, loq_export, base_unit=None):
 
@@ -436,47 +425,42 @@ class Extractor:
         # Isolate the C12 data
         concentrations = self.sample_data[~self.sample_data["Compound"].str.contains("C13")]
         # transpose the data
-        self.concentration_table = concentrations.pivot(index="Compound", columns="Sample_Name", values="Calculated Amt")
+        self.concentration_table = concentrations.pivot(index="Compound", columns="Sample_Name",
+                                                        values="Calculated Amt")
         # Replace nans and nulls with "NA"
-        print_df(f"Test concentrations 1: \n{concentrations}")
-        # concentrations, conc_nulls = self._replace(concentrations,
-        #                                            to_replace=[np.nan, 0],
-        #                                            value="NA", axis="row",
-        #                                            drop=True)
-
-        print_df(f"Test concentrations 2: \n{concentrations}")
-        self.concentration_table = concentrations.copy()
+        self.concentration_table.drop(index=list(self.calib_nulls.columns), inplace=True)
         # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
         # If metadata detected, normalise the concentrations and do loq, else only do loq
         if self.metadata is not None:
-            self._generate_normalised_concentrations(new_cols, base_unit)
+            # normalise
+            self._generate_normalised_concentrations(new_cols)
+            # map "ND" to negative and null values
+            self.normalised_concentrations = self.normalised_concentrations.applymap(format)
+            self.loq_table = self.loq_table.mask(self.normalised_concentrations == "ND", "ND")
+            # add unit column
+            self.normalised_concentrations["unit"] = f"{base_unit}/{self.norm_unit}"
+            self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
+            new_cols.insert(0, "unit")
+            self.normalised_concentrations = self.normalised_concentrations[new_cols]
+            self.loq_table = self.loq_table[new_cols]
         else:
-            self.loq_table = self._define_loq(self.concentration_table)
-            self._clean_loq_table()
+            # generate loq_table
+            self.loq_table = self._define_loq(self.concentration_table.copy())
+            # map "ND" to negative and null values
+            self.concentration_table = self.concentration_table.applymap(format)
+            self.loq_table = self.loq_table.mask(self.concentration_table == "ND", "ND")
             # add unit column
             new_cols.insert(0, "unit")
             self.concentration_table["unit"] = base_unit
             self.loq_table["unit"] = base_unit
             self.concentration_table, self.loq_table = self.concentration_table[new_cols], self.loq_table[new_cols]
 
-        self.calib_data, cal_nulls = self._replace(self.calib_data,
-                                                   to_replace=[np.nan, 0],
-                                                   value="NA", axis="row",
-                                                   drop=True)
-
-        # log the removed rows from concentrations table
-        if not conc_nulls.empty:
-            self.logger.info(f"\nRows removed from the concentration table:\n{conc_nulls.T}")
-        # log the removed rows from calibration table
-        if not cal_nulls.empty:
-            self.logger.info(f"\nRows removed from the calibration table:\n{cal_nulls.T}")
-
         # Add to export lists
         if self.metadata is not None:
             self.excel_tables.append(
-                ("Normalised_Concentrations", self.concentration_table),
+                ("Normalised_Concentrations", self.normalised_concentrations),
             )
         else:
             self.excel_tables.append(
@@ -564,9 +548,11 @@ class Extractor:
         if self.metadata is not None:
             name = "Normalised_Ratios"
             self.ratios = self.normalise(self.ratios)
+            self.ratios = self.ratios.applymap(format)
             self.ratios["unit"] = f"{base_unit}/{self.norm_unit}"
         else:
             name = "Ratios"
+            self.ratios = self.ratios.applymap(format)
             self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
         self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
@@ -587,7 +573,7 @@ class Extractor:
             return c12_compounds, None
 
     @staticmethod
-    def _isolate_nulls(df):
+    def _isolate_nulls(df: pd.DataFrame):
 
         nulls_nans = []
         for col in df.columns:
@@ -663,11 +649,11 @@ class Extractor:
         with open(f"{destination}\\file.log", "w") as log:
             print(self.stream.getvalue(), file=log)
 
-    def export_stat_output(self, path, conc_unit):
+    def export_stat_output(self, path):
 
         dest = Path(path)
         dest = dest / "output_for_graphstat.tsv"
-        stat_out = self._build_stat_output(conc_unit)
+        stat_out = self._build_stat_output()
         stat_out.to_csv(str(dest), sep="\t", index=False, encoding='utf-8-sig')
         self._output_log(path)
 
@@ -675,9 +661,13 @@ class Extractor:
 
         dest_path = Path(path)
         dest_path = dest_path / "Tables.xlsx"
-        with pd.ExcelWriter(str(dest_path)) as writer:
-            for (name, table) in self.excel_tables:
-                table.to_excel(writer, sheet_name=name, engine="openpyxl")
+        try:
+            with pd.ExcelWriter(str(dest_path)) as writer:
+                for (name, table) in self.excel_tables:
+                    table.to_excel(writer, sheet_name=name, engine="openpyxl")
+        except PermissionError:
+            raise PermissionError("Permission denied. Please check that the Tables.xlsx file is "
+                                  "not open so that MS_Reader can overwrite it")
         self._output_log(str(path))
         print(f"Done exporting. Path:\n {str(dest_path)}")
 
@@ -748,7 +738,7 @@ class Extractor:
         else:
             return df
 
-    def _build_stat_output(self, conc_unit):
+    def _build_stat_output(self):
 
         to_out = []
         if isinstance(self.c12_areas, pd.DataFrame) and isinstance(self.c13_areas, pd.DataFrame):
@@ -759,9 +749,7 @@ class Extractor:
             c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
             c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
-            c12_areas.insert(2, "unit", "Arbitrary")
             c13_areas.insert(1, "type", "C13 area")
-            c13_areas.insert(2, "unit", "Arbitrary")
             to_out.append(c12_areas)
             to_out.append(c13_areas)
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(self.loq_table, pd.DataFrame):
@@ -771,14 +759,12 @@ class Extractor:
             concentrations = concentrations.reset_index()
             concentrations = concentrations.rename({"Compound": "Features"}, axis=1)
             concentrations.insert(1, "type", "concentration")
-            concentrations.insert(2, "unit", conc_unit)
             to_out.append(concentrations)
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
             ratios = self._replace(ratios, [np.inf, np.nan, ""], "NA", "dataframe")
             ratios = ratios.rename({"Compound": "Features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
-            ratios.insert(2, "unit", "Arbitrary")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
         return stat_out
