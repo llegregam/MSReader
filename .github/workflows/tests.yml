@@ -1,6 +1,12 @@
 name: Tests
 
-on: [push]
+on:
+  push:
+    tags:
+      - run_tests**
+  pull_request:
+    types:
+      - closed
 jobs:
   test:
     runs-on: ${{ matrix.os}}
@@ -22,4 +28,5 @@ jobs:
           pip install tox tox-gh-actions
       - name: Test with tox
         run: tox
+
 
