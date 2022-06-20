@@ -12,7 +12,7 @@ def get_last_version():
     try:
         pf_path = pathlib.Path(ms_reader.__file__).parent
         # Get the version from pypi
-        response = requests.get(f'https://pypi.org/pypi/ms-reader/json')
+        response = requests.get('https://pypi.org/pypi/ms-reader/json')
         latest_version = response.json()['info']['version']
         with open(str(pathlib.Path(pf_path, "last_version.txt")), "w") as f:
             f.write(latest_version)
