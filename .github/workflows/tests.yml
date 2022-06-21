@@ -3,7 +3,7 @@ name: Tests
 on:
   push:
     tags:
-      - run_tests**
+      - run_tests
   pull_request:
     types:
       - closed
