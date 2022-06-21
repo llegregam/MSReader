@@ -208,12 +208,12 @@ class Extractor:
         return data
 
     @staticmethod
-    def get_min(row: pd.Series) -> float:
+    def get_min(row: pd.Series) -> np.ndarray:
         """
         Get row minimum (used for applying along axis in a pandas dataframe
         using the apply method)
         :param row: input row passed in by apply method
-        :return minimum_value: Row minimum value
+        :return minimum_value: Row minimum value (ndarray scalar)
         """
         row = row.values
         only_num = [val for val in row if type(val) != str]
@@ -224,12 +224,12 @@ class Extractor:
             return minimum_val
 
     @staticmethod
-    def get_max(row: pd.Series) -> float:
+    def get_max(row: pd.Series) -> np.ndarray:
         """
         Get row maximum (used for applying along axis in a pandas dataframe
         using the apply method)
         :param row: input row passed in by apply method
-        :return minimum_value: Row maximum value
+        :return minimum_value: Row maximum value (ndarray scalar)
         """
         row = row.values
         only_num = [val for val in row if type(val) != str]
@@ -695,13 +695,25 @@ class Extractor:
             self.ratios = self.ratios.applymap(format)
             self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
-        self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
+        # self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
+        self.ratios = self._replace(self.ratios, [np.inf, np.nan], "NA", "dataframe")
         self.excel_tables.append(
             (name, self.ratios)
         )
 
     @staticmethod
     def _check_if_std(c12_compounds, c13_compounds):
+        """
+        Get list of missing standards in the IDMS (13C) signals. If none, do
+        nothing and return 12C compounds list as is. Else, remove the missing
+        metabolites from the list of 12C compounds to drop them from data
+        after.
+
+        :param c12_compounds: list of all the 12C compound names in data
+        :param c13_compounds: list of all the 13C compound names in data
+        :return: list of 12C compounds minus the removed compounds and list
+                 of the compounds missing from IDMS
+        """
 
         trunc_c13 = [std[:-4] for std in c13_compounds]
         missing_std = [x for x in c12_compounds if x not in trunc_c13]
@@ -829,7 +841,7 @@ class Extractor:
             value: Any,
             axis: str,
             drop: bool = False
-    ) -> pd.DataFrame:
+    ) -> (pd.DataFrame, pd.DataFrame):
 
         """
 
@@ -895,10 +907,10 @@ class Extractor:
         to_out = []
         if isinstance(self.c12_areas, pd.DataFrame) and isinstance(
                 self.c13_areas, pd.DataFrame):
-            c12_areas = self._replace(self.c12_areas, [0, np.inf, ""], "NA",
-                                      "row")
-            c13_areas = self._replace(self.c13_areas, [0, np.inf, ""], "NA",
-                                      "row")
+            c12_areas = self._replace(self.c12_areas, [0, np.inf, "", "ND"],
+                                      "NA", "dataframe")
+            c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"],
+                                      "NA", "dataframe")
             c12_areas = c12_areas.reset_index()
             c13_areas = c13_areas.reset_index()
             c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
@@ -909,10 +921,13 @@ class Extractor:
             to_out.append(c13_areas)
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
                 self.loq_table, pd.DataFrame):
-            concentrations = self._replace(self.loq_table.copy(), "<LLOQ",
+            concentrations = self.loq_table.drop(
+                ["LLOQ", "ULOQ"], axis=1
+            ).copy()
+            concentrations = self._replace(concentrations, ["<LLOQ", "ND"],
                                            "NA", "dataframe")
-            concentrations = self._replace(concentrations, ">ULOQ", "NA",
-                                           "dataframe")
+            concentrations = self._replace(concentrations, [">ULOQ", "ND"],
+                                           "NA", "dataframe")
             concentrations = self._replace(concentrations, "", "NA",
                                            "dataframe")
             concentrations = concentrations.reset_index()
@@ -922,7 +937,7 @@ class Extractor:
             to_out.append(concentrations)
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
-            ratios = self._replace(ratios, [np.inf, np.nan, ""], "NA",
+            ratios = self._replace(ratios, [np.inf, np.nan, "", "ND"], "NA",
                                    "dataframe")
             ratios = ratios.rename({"Compound": "Features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
