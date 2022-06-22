@@ -7,6 +7,11 @@ import pandas as pd
 from extract import Extractor
 from ms_reader import __version__, __file__
 
+# Constants
+EXCEL_ENGINE = "openpyxl"
+MIME = "application/vnd.openxmlformats-" \
+       "officedocument.spreadsheetml.sheet"
+
 
 def check_uptodate():
     """Compare installed and most recent package versions."""
@@ -24,6 +29,10 @@ def check_uptodate():
             )
     except Exception:
         pass
+
+
+def df_format(x):
+    return x.astype(str)
 
 
 @st.cache
@@ -52,25 +61,43 @@ with col2:
     report = st.file_uploader("Upload Report File (optional)")
 with col3:
     metadata = st.file_uploader("Upload Metadata (optional)")
-qc_type = st.selectbox(
-    "Choose molecular type (for quality control)",
-    ["--", "Central Metabolites", "Amino Acids", "Coenzymes A"]
-)
-excel_engine = "openpyxl"
+
 if data:
 
     # noinspection PyArgumentList
-    data = pd.read_excel(io=data, engine=excel_engine)
+    data = pd.read_excel(io=data, engine=EXCEL_ENGINE)
+
+    # Add way to drop metabolites from data
+    with st.expander("Click to open metabolite remover"):
+        with st.form("metabolite_dropper"):
+            metabolites_to_drop = st.multiselect(
+                label="Select metabolites to remove from the data",
+                options=data["Compound"].unique(),
+                help="The metabolites selected here will be removed from the "
+                     "final generated data. To avoid any errors, it is "
+                     "advised to remove both the 12C and 13C version of the "
+                     "metabolite."
+            )
+            st.form_submit_button("Remove selected")
+        if metabolites_to_drop:
+            data = data.set_index("Compound").drop(
+                metabolites_to_drop).reset_index()
+        st.dataframe(df_format(data))
+
+    qc_type = st.selectbox(
+        "Choose molecular type (for quality control)",
+        ["--", "Central Metabolites", "Amino Acids", "Coenzymes A"]
+    )
 
     # Check if report and metadate files are given, if so read them
     if report:
         # noinspection PyArgumentList
-        report = pd.read_excel(io=report, engine=excel_engine)
+        report = pd.read_excel(io=report, engine=EXCEL_ENGINE)
     else:
         report = None
     if metadata:
         # noinspection PyArgumentList
-        metadata = pd.read_excel(io=metadata, engine=excel_engine)
+        metadata = pd.read_excel(io=metadata, engine=EXCEL_ENGINE)
     else:
         metadata = None
 
@@ -104,13 +131,12 @@ if data:
             help="Select a number of normalisations "
                  "columns for the metadata file"
         )
-        mime = "application/vnd.openxmlformats-" \
-               "officedocument.spreadsheetml.sheet"
+
         st.download_button(
             label="Generate Metadata",
             data=convert_df(ms_reader.generate_metadata(number_norms)),
             file_name="Metadata.xlsx",
-            mime=mime,
+            mime=MIME,
             help="Generate metadata with a number of normalisation "
                  "columns equal to the number entered above"
         )
@@ -152,9 +178,6 @@ if data:
         submit_stat_out = st.form_submit_button("Export stat output")
 
     ms_reader.handle_calibration()
-
-    def df_format(x):
-        return x.astype(str)
 
     if report_box:
         ms_reader.generate_report()
