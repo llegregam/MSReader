@@ -32,6 +32,12 @@ def check_uptodate():
 
 
 def df_format(x):
+    """
+    Function to apply str format to df for display in the GUI
+
+    :param x: value to convert
+    :return: converted value
+    """
     return x.astype(str)
 
 
@@ -111,16 +117,16 @@ if data:
     else:
         qc_type = None
 
-    ms_reader = Extractor(data, report, metadata, qc_type)
+    reader = Extractor(data, report, metadata, qc_type)
 
     if qc_type is not None:
-        qc_result = ms_reader.handle_qc()
+        qc_result = reader.handle_qc()
         if not qc_result:
             st.error("QC not valid:")
-            st.write(ms_reader.qc_table)
+            st.write(reader.qc_table)
         else:
             st.subheader("QC is valid:")
-            st.write(ms_reader.qc_table)
+            st.write(reader.qc_table)
 
     if metadata is None:
         number_norms = st.number_input(
@@ -134,18 +140,16 @@ if data:
 
         st.download_button(
             label="Generate Metadata",
-            data=convert_df(ms_reader.generate_metadata(number_norms)),
+            data=convert_df(reader.generate_metadata(number_norms)),
             file_name="Metadata.xlsx",
             mime=MIME,
             help="Generate metadata with a number of normalisation "
                  "columns equal to the number entered above"
         )
     else:
-        # st.info("Normalisation will be applied following the
-        # given metadata file:")
         with st.expander("Normalisation will be applied following "
                          "the given metadata file (click to display)"):
-            st.dataframe(ms_reader.metadata)
+            st.dataframe(reader.metadata)
 
     st.subheader("Choose tables to output")
 
@@ -154,7 +158,7 @@ if data:
         with cln1:
             report_box = st.checkbox(
                 "Report", key="report_box",
-                disabled=True if ms_reader.calrep is None else False
+                disabled=True if reader.calrep is None else False
             )
         with cln2:
             areas_box = st.checkbox("Areas", key="areas_box")
@@ -167,9 +171,9 @@ if data:
 
         concentration_unit = st.text_input(
             label="Input the concentration unit"
-            if ms_reader.metadata is None
+            if reader.metadata is None
             else "Input the quantity unit",
-            value="µM" if ms_reader.metadata is None else "µmol"
+            value="µM" if reader.metadata is None else "µmol"
         )
 
         destination = st.text_input("Input destination path for excel files")
@@ -177,54 +181,54 @@ if data:
         submit_export = st.form_submit_button("Export selection")
         submit_stat_out = st.form_submit_button("Export stat output")
 
-    ms_reader.handle_calibration()
+    reader.handle_calibration()
 
     if report_box:
-        ms_reader.generate_report()
+        reader.generate_report()
         if preview:
             with st.expander("Show report"):
-                st.dataframe(ms_reader.calrep)
+                st.dataframe(reader.calrep)
     if areas_box:
-        ms_reader.generate_areas_table()
+        reader.generate_areas_table()
         if preview:
             with st.expander("Show C12 Areas"):
-                st.dataframe(ms_reader.c12_areas.apply(df_format))
-                if not ms_reader.excluded_c12_areas.empty:
+                st.dataframe(reader.c12_areas.apply(df_format))
+                if not reader.excluded_c12_areas.empty:
                     st.write("Some metabolites were excluded:")
-                    st.dataframe(ms_reader.excluded_c12_areas)
+                    st.dataframe(reader.excluded_c12_areas)
             with st.expander("Show C13 Areas"):
-                st.dataframe(ms_reader.c13_areas.apply(df_format))
-                if not ms_reader.excluded_c13_areas.empty:
+                st.dataframe(reader.c13_areas.apply(df_format))
+                if not reader.excluded_c13_areas.empty:
                     st.write("Some metabolites were excluded:")
-                    st.dataframe(ms_reader.excluded_c13_areas)
+                    st.dataframe(reader.excluded_c13_areas)
     if ratios_box:
-        ms_reader.generate_ratios()
+        reader.generate_ratios()
         if preview:
             with st.expander("Show Ratios"):
-                st.dataframe(ms_reader.ratios.apply(df_format))
+                st.dataframe(reader.ratios.apply(df_format))
     if conc_box or lloq_box:
-        ms_reader.generate_concentrations_table(lloq_box)
+        reader.generate_concentrations_table(lloq_box)
         if conc_box:
             if preview:
-                if ms_reader.metadata is None:
+                if reader.metadata is None:
                     with st.expander("Show concentrations (no lloq)"):
                         st.dataframe(
-                            ms_reader.concentration_table.apply(df_format)
+                            reader.concentration_table.apply(df_format)
                         )
                 else:
                     with st.expander("Show concentrations (no lloq)"):
                         st.dataframe(
-                            ms_reader.normalised_concentrations.apply(
+                            reader.normalised_concentrations.apply(
                                 df_format
                             )
                         )
         if lloq_box:
             if preview:
                 with st.expander("Show concentrations (with lloq)"):
-                    st.dataframe(ms_reader.loq_table.astype(str))
+                    st.dataframe(reader.loq_table.astype(str))
     if submit_export:
-        ms_reader.export_final_excel(destination)
+        reader.export_final_excel(destination)
         st.success("The final excel has been generated")
     if submit_stat_out:
-        ms_reader.export_stat_output(destination)
+        reader.export_stat_output(destination)
         st.success("The output for the stat object has been generated")

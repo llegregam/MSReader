@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from natsort import natsorted, index_natsorted
+from openpyxl import load_workbook
 
 from ms_reader.utils import format
 
@@ -696,7 +697,9 @@ class Extractor:
             self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
         # self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
-        self.ratios = self._replace(self.ratios, [np.inf, np.nan], "NA", "dataframe")
+        self.ratios = self._replace(
+            self.ratios, [np.inf, np.nan], "NA", "dataframe"
+        )
         self.excel_tables.append(
             (name, self.ratios)
         )
@@ -831,8 +834,34 @@ class Extractor:
                 "good_tables_norm.xlsx file is "
                 "not open so that MS_Reader can overwrite it"
             )
+        # Color the sheet to delete
+        if self.metadata is None:
+            sheet_name = "Concentrations"
+        else:
+            sheet_name = "Normalised_Concentrations"
+        self._color_sheet_tab(sheet_name, str(dest_path))
+
         self._output_log(str(path))
         print(f"Done exporting. Path:\n {str(dest_path)}")
+
+    @staticmethod
+    def _color_sheet_tab(sheet, path, color="red"):
+        """
+        color the selected sheet tab and save the file
+
+        :param sheet: Name of the sheet
+        :param path: Path to excel file
+        :return: None
+        """
+
+        if color == "red":
+            tab_color = "FF0000"
+        else:
+            tab_color = None
+        wb = load_workbook(filename=str(path))
+        wb[sheet].sheet_properties.tabColor = tab_color
+        wb.save(str(path))
+        wb.close()
 
     @staticmethod
     def _replace(
