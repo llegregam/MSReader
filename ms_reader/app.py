@@ -13,6 +13,7 @@ MIME = "application/vnd.openxmlformats-" \
        "officedocument.spreadsheetml.sheet"
 
 
+@st.cache
 def check_uptodate():
     """Compare installed and most recent package versions."""
     try:
@@ -167,7 +168,7 @@ if data:
         with cln4:
             conc_box = st.checkbox("Concentrations", key="conc_box")
         with cln5:
-            lloq_box = st.checkbox("LLoQ", key="lloq_box")
+            lloq_box = st.checkbox("LLOQ", key="lloq_box")
 
         concentration_unit = st.text_input(
             label="Input the concentration unit"
@@ -201,11 +202,17 @@ if data:
                 if not reader.excluded_c13_areas.empty:
                     st.write("Some metabolites were excluded:")
                     st.dataframe(reader.excluded_c13_areas)
+            if reader.metadata is not None:
+                with st.expander("Show normalised 12C Areas"):
+                    st.dataframe(reader.norm_c12_areas.apply(df_format))
     if ratios_box:
         reader.generate_ratios()
         if preview:
             with st.expander("Show Ratios"):
                 st.dataframe(reader.ratios.apply(df_format))
+            if reader.metadata is not None:
+                with st.expander("Show normalised ratios"):
+                    st.dataframe(reader.normalised_ratios.apply(df_format))
     if conc_box or lloq_box:
         reader.generate_concentrations_table(lloq_box)
         if conc_box:
@@ -216,16 +223,24 @@ if data:
                             reader.concentration_table.apply(df_format)
                         )
                 else:
-                    with st.expander("Show concentrations (no lloq)"):
+                    with st.expander("Show quantities (no lloq)"):
                         st.dataframe(
-                            reader.normalised_concentrations.apply(
-                                df_format
-                            )
+                            reader.quantities.apply(df_format)
+                        )
+                    with st.expander("Show normalised quantities (no lloq)"):
+                        st.dataframe(
+                            reader.normalised_quantities.apply(df_format)
                         )
         if lloq_box:
             if preview:
-                with st.expander("Show concentrations (with lloq)"):
-                    st.dataframe(reader.loq_table.astype(str))
+                if reader.metadata is None:
+                    with st.expander("Show concentrations (with lloq)"):
+                        st.dataframe(reader.loq_table.astype(str))
+                else:
+                    with st.expander(
+                            "Show normalised quantities (with lloq)"
+                    ):
+                        st.dataframe(reader.loq_table.apply(df_format))
     if submit_export:
         reader.export_final_excel(destination)
         st.success("The final excel has been generated")
