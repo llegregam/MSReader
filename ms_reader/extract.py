@@ -418,7 +418,8 @@ class Extractor:
     def generate_areas_table(self):
         """
         Generate the 12C and 13C area tables by separating them from the
-        rest of the data and formatting :return: None
+        rest of the data and formatting
+        :return: None
         """
 
         # separate 12C and 13C sample data
@@ -449,18 +450,21 @@ class Extractor:
         c12_cols.insert(0, "Unit")
         c13_cols.insert(0, "Unit")
         base_unit = "area"
+
         # Normalise c12 data
         if self.metadata is not None:
             self.norm_c12_areas = self.normalise(self.c12_areas.copy())
             self.norm_c12_areas = self.norm_c12_areas.applymap(format)
             self.norm_c12_areas["Unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
+
         self.c12_areas = self.c12_areas.applymap(format)
         self.c13_areas = self.c13_areas.applymap(format)
         self.c12_areas["Unit"] = base_unit
         self.c13_areas["Unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
         self.c13_areas = self.c13_areas[c13_cols]
+
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
@@ -495,19 +499,6 @@ class Extractor:
                 for norm in self.md_values.columns[1:]:
                     df[col] = df[col].divide(self.md_values.at[col, norm])
         return df
-
-    # def _clean_loq_table(self):
-    #     """
-    #     Clean up loq table by removing rows where we have no calibration data
-    #     :return: None
-    #     """
-    #
-    #     to_drop = list(self.calib_nulls.index.values)
-    #     self.loq_table = self.loq_table.drop(index=to_drop)
-    #
-    #     # sort the loq table columns naturally
-    #     new_loq_cols = natsorted(self.loq_table.columns)
-    #     self.loq_table = self.loq_table[new_loq_cols]
 
     def _generate_normalised_concentrations(self, columns: list):
         """
@@ -1058,6 +1049,11 @@ class Extractor:
             ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
+        stat_out["Unit"] = stat_out["Unit"].str.replace(
+            pat="/",
+            repl="_per_",
+            regex=False
+        )
         return stat_out
 
 
