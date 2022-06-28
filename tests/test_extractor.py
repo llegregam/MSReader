@@ -57,7 +57,7 @@ class TestExtractor:
         assert metadata.index.values.all() == msr.data[
             "Sample_Name"
         ].unique().all()
-        assert "L" in list(metadata["Volume_Unit"])
+        assert "µL" in list(metadata["Volume_Unit"])
 
     def test_areas_no_norm(self, mydata, script_location):
         ms_reader = Extractor(mydata)
@@ -170,19 +170,29 @@ class TestExtractor:
         msr = Extractor(data=mydata, metadata=metadata)
         msr.handle_calibration()
         msr.generate_concentrations_table(loq_export=True)
-        good_concentration_norm = pd.read_excel(
+        good_quantities = pd.read_excel(
             script_location.join("data/good_tables_norm.xlsx"),
-            sheet_name="Normalised_Concentrations",
+            sheet_name="Quantities",
+            index_col="Compound"
+        )
+        good_quantities_norm = pd.read_excel(
+            script_location.join("data/good_tables_norm.xlsx"),
+            sheet_name="Normalised_Quantities",
             index_col="Compound"
         )
         good_loq_norm = pd.read_excel(
             script_location.join("data/good_tables_norm.xlsx"),
-            sheet_name="Normalised_Concentrations_LLOQ",
+            sheet_name="Normalised_Quantities_LLOQ",
             index_col="Compound"
         )
         pd.testing.assert_frame_equal(
-            good_concentration_norm,
-            msr.normalised_concentrations,
+            good_quantities,
+            msr.quantities,
+            check_names=False
+        )
+        pd.testing.assert_frame_equal(
+            good_quantities_norm,
+            msr.normalised_quantities,
             check_names=False
         )
         pd.testing.assert_frame_equal(
