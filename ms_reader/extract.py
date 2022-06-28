@@ -18,7 +18,10 @@ class Extractor:
 
     def __init__(self, data, calrep=None, metadata=None, met_class="CM"):
 
-        self.normalised_concentrations = None
+        self.normalised_ratios = None
+        self.norm_c12_areas = None
+        self.quantities = None
+        self.normalised_quantities = None
         self.qc_table = None
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
@@ -123,7 +126,8 @@ class Extractor:
             for x in range(1, number_cols + 1):
                 col_nums += 2 * [x]
             for idx, (num, col) in enumerate(
-                    zip(col_nums, self.metadata.columns[2:])):
+                    zip(col_nums, self.metadata.columns[2:])
+            ):
                 if idx % 2 == 0:
                     if col != f"Norm{num}":
                         raise ValueError(
@@ -182,7 +186,7 @@ class Extractor:
         metadata = pd.DataFrame(columns=cols)
         metadata["Sample_Name"] = natsorted(self.data["Sample_Name"].unique())
         metadata.set_index("Sample_Name", inplace=True)
-        metadata["Volume_Unit"] = "L"
+        metadata["Volume_Unit"] = "µL"
         return metadata
 
     # noinspection PyArgumentList
@@ -315,22 +319,30 @@ class Extractor:
         min_max_calib = min_max_calib.sort_values(
             ["Compound", "Sample_Name"],
             key=lambda x: np.argsort(
-                index_natsorted(zip(min_max_calib["Compound"],
-                                    min_max_calib["Sample_Name"]))
-            ))
+                index_natsorted(zip(
+                    min_max_calib["Compound"],
+                    min_max_calib["Sample_Name"]
+                ))
+            )
+        )
         # Pivot and add the min and max columns
-        min_max_calib = min_max_calib.pivot(index="Compound",
-                                            columns="Sample_Name",
-                                            values="Calculated Amt")
+        min_max_calib = min_max_calib.pivot(
+            index="Compound",
+            columns="Sample_Name",
+            values="Calculated Amt"
+        )
         min_max_calib = min_max_calib.reindex(
-            columns=natsorted(min_max_calib.columns))
+            columns=natsorted(min_max_calib.columns)
+        )
         calibration_minimum = min_max_calib.apply(Extractor.get_min, axis=1)
         calibration_maximum = min_max_calib.apply(Extractor.get_max, axis=1)
         min_max_calib["min"] = calibration_minimum
         min_max_calib["max"] = calibration_maximum
         self.min_max = min_max_calib[["min", "max"]].copy()
-        self.min_max = self.min_max.rename({"min": "LLOQ", "max": "ULOQ"},
-                                           axis=1)
+        self.min_max = self.min_max.rename(
+            {"min": "LLOQ", "max": "ULOQ"},
+            axis=1
+        )
         self.calib_data = min_max_calib
         self.excel_tables.append(
             ("Calibration", self.calib_data)
@@ -342,12 +354,13 @@ class Extractor:
         :return: None
         """
         self._generate_minmax_calib()
-        self.calib_data, self.calib_nulls = self._replace(self.calib_data,
-                                                          to_replace=[np.nan,
-                                                                      0],
-                                                          value="NA",
-                                                          axis="row",
-                                                          drop=True)
+        self.calib_data, self.calib_nulls = self._replace(
+            self.calib_data,
+            to_replace=[np.nan, 0],
+            value="NA",
+            axis="row",
+            drop=True
+        )
         if not self.calib_nulls.empty:
             self.logger.info(
                 f"\nRows removed from the calibration table:"
@@ -363,10 +376,12 @@ class Extractor:
         if self.met_class == "CM":
             qc_mets = ["FruBP", "Oro", "Rib1P"]
             qc_verif = self.qc_data[
-                self.qc_data["Compound"].isin(qc_mets)].copy()
+                self.qc_data["Compound"].isin(qc_mets)
+            ].copy()
         elif self.met_class == "AA" or self.met_class == "CoA":
             qc_verif = self.qc_data[
-                ~self.qc_data["Compound"].str.contains("C13")].copy()
+                ~self.qc_data["Compound"].str.contains("C13")
+            ].copy()
         else:
             raise KeyError(
                 "The selected metabolite class is not valid. "
@@ -377,11 +392,13 @@ class Extractor:
         # Replace commas with dots and convert columns to numeric
         for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
             qc_verif[col] = qc_verif[col].apply(
-                lambda x: str(x).replace(",", "."))
+                lambda x: str(x).replace(",", ".")
+            )
             qc_verif[col] = pd.to_numeric(qc_verif[col], errors="coerce")
 
         self.qc_table = qc_verif[
-            ["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]]
+            ["Compound", "Theoretical Amt", "Calculated Amt", "%Diff"]
+        ]
         self.qc_table.set_index("Compound", inplace=True)
 
         # QC is set to have a difference between sample point
@@ -401,14 +418,17 @@ class Extractor:
     def generate_areas_table(self):
         """
         Generate the 12C and 13C area tables by separating them from the
-        rest of the data and formatting :return: None
+        rest of the data and formatting
+        :return: None
         """
 
         # separate 12C and 13C sample data
         c12 = self.sample_data[
-            ~self.sample_data["Compound"].str.contains("C13")].copy()
+            ~self.sample_data["Compound"].str.contains("C13")
+        ].copy()
         c13 = self.sample_data[
-            self.sample_data["Compound"].str.contains("C13")].copy()
+            self.sample_data["Compound"].str.contains("C13")
+        ].copy()
 
         c12_areas = pd.pivot_table(c12, "Area", "Compound", "Sample_Name")
         c13_areas = pd.pivot_table(c13, "Area", "Compound", "Sample_Name")
@@ -418,45 +438,52 @@ class Extractor:
         self.c13_areas = c13_areas[~c13_areas.isin(["Excluded"]).all(axis=1)]
 
         self.excluded_c12_areas = c12_areas[
-            c12_areas.isin(["Excluded"]).all(axis=1)]
+            c12_areas.isin(["Excluded"]).all(axis=1)
+        ]
         self.excluded_c13_areas = c13_areas[
-            c13_areas.isin(["Excluded"]).all(axis=1)]
+            c13_areas.isin(["Excluded"]).all(axis=1)
+        ]
 
         # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
+        c12_cols.insert(0, "Unit")
+        c13_cols.insert(0, "Unit")
         base_unit = "area"
+
+        # Normalise c12 data
         if self.metadata is not None:
-            self.c12_areas = self.normalise(self.c12_areas)
-            self.c13_areas = self.normalise(self.c13_areas)
-            self.c12_areas = self.c12_areas.applymap(format)
-            self.c13_areas = self.c13_areas.applymap(format)
-            self.c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
-            self.c13_areas["unit"] = f"{base_unit}/{self.norm_unit}"
-        else:
-            self.c12_areas = self.c12_areas.applymap(format)
-            self.c13_areas = self.c13_areas.applymap(format)
-            self.c12_areas["unit"] = base_unit
-            self.c13_areas["unit"] = base_unit
-        c12_cols.insert(0, "unit")
-        c13_cols.insert(0, "unit")
+            self.norm_c12_areas = self.normalise(self.c12_areas.copy())
+            self.norm_c12_areas = self.norm_c12_areas.applymap(format)
+            self.norm_c12_areas["Unit"] = f"{base_unit}/{self.norm_unit}"
+            self.norm_c12_areas = self.norm_c12_areas[c12_cols]
+
+        self.c12_areas = self.c12_areas.applymap(format)
+        self.c13_areas = self.c13_areas.applymap(format)
+        self.c12_areas["Unit"] = base_unit
+        self.c13_areas["Unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
         self.c13_areas = self.c13_areas[c13_cols]
+
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
         self.excel_tables.append(
             ("C13_areas", self.c13_areas)
         )
+        if self.metadata is not None:
+            self.excel_tables.append(
+                ("Normalised_C12_areas", self.norm_c12_areas)
+            )
 
-    def _color_concentrations(self):
-        pass
-
-    def normalise(self, df) -> pd.DataFrame:
+    def normalise(self, df, multiply=True, divide=True) -> pd.DataFrame:
         """
         Normalise concentrations by multiplying by volume and dividing by norms
+
         :param df: dataframe to normalise
-        :return:
+        :param multiply: should the multiplications be applied
+        :param divide: should the divisions be applied
+        :return: dataframe containing normalised data
         """
 
         df = df.apply(
@@ -464,48 +491,122 @@ class Extractor:
         )
 
         for col in df.columns:
-            df[col] = df[col].multiply(
-                self.md_values.at[col, "Resuspension_Volume"])
-            for norm in self.md_values.columns[1:]:
-                df[col] = df[col].divide(self.md_values.at[col, norm])
+            if multiply:
+                df[col] = df[col].multiply(
+                    self.md_values.at[col, "Resuspension_Volume"])
+                df[col] = df[col].multiply(1e-6)
+            if divide:
+                for norm in self.md_values.columns[1:]:
+                    df[col] = df[col].divide(self.md_values.at[col, norm])
         return df
-
-    # def _clean_loq_table(self):
-    #     """
-    #     Clean up loq table by removing rows where we have no calibration data
-    #     :return: None
-    #     """
-    #
-    #     to_drop = list(self.calib_nulls.index.values)
-    #     self.loq_table = self.loq_table.drop(index=to_drop)
-    #
-    #     # sort the loq table columns naturally
-    #     new_loq_cols = natsorted(self.loq_table.columns)
-    #     self.loq_table = self.loq_table[new_loq_cols]
 
     def _generate_normalised_concentrations(self, columns: list):
         """
         Normalise the concentrations and put them into a clean df. Also
-        generate loq_table :param columns: columns to use for sorting the
-        tables :return: None
+        generate loq_table
+
+        :param columns: columns to use for sorting the tables
+        :return: None
         """
 
-        self.normalised_concentrations = self.normalise(
-            self.concentration_table.copy())
+        self.quantities = self.normalise(
+            self.concentration_table.copy(),
+            divide=False
+        )
+        self.normalised_quantities = self.normalise(
+            self.concentration_table.copy()
+        )
         # sort the columns naturally
-        self.normalised_concentrations = self.normalised_concentrations[
-            columns]
+        self.quantities = self.quantities[columns]
+        self.normalised_quantities = self.normalised_quantities[columns]
         # define loqs
-        self.loq_table = self.normalised_concentrations.copy()
+        self.loq_table = self.normalised_quantities.copy()
         for idx in self.loq_table.index:
             lloq_mask = self.concentration_table.loc[idx, :].apply(
-                lambda x: float(x) < self.calib_data.at[idx, "min"])
+                lambda x: float(x) < self.calib_data.at[idx, "min"]
+            )
             uloq_mask = self.concentration_table.loc[idx, :].apply(
-                lambda x: float(x) > self.calib_data.at[idx, "max"])
+                lambda x: float(x) > self.calib_data.at[idx, "max"]
+            )
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(
-                ~lloq_mask, other="<LLOQ")
+                ~lloq_mask, other="<LLOQ"
+            )
             self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(
-                ~uloq_mask, other=">ULOQ")
+                ~uloq_mask, other=">ULOQ"
+            )
+
+    def _handle_conc_norm(self, cols, base_unit):
+        """
+        Handle normalisations on the concentrations tables
+
+        :param cols: columns to rearrange the dfs
+        :param base_unit: unit to put in unit column
+        :return: None
+        """
+        # normalise
+        self._generate_normalised_concentrations(cols)
+        # map "ND" to negative and null values
+        self.quantities = self.quantities.applymap(format)
+        self.normalised_quantities = \
+            self.normalised_quantities.applymap(format)
+        self.loq_table = self.loq_table.mask(
+            self.normalised_quantities == "ND", "ND"
+        )
+        # add unit column
+        self.quantities["Unit"] = base_unit
+        self.normalised_quantities["Unit"] = \
+            f"{base_unit}/{self.norm_unit}"
+        self.loq_table["Unit"] = f"{base_unit}/{self.norm_unit}"
+        cols.insert(0, "Unit")
+        self.quantities = self.quantities[cols]
+        self.normalised_quantities = self.normalised_quantities[cols]
+        self.quantities = pd.merge(
+            left=self.quantities,
+            right=self.min_max,
+            how="left",
+            left_index=True,
+            right_index=True
+        )
+        self.normalised_quantities = pd.merge(
+            left=self.normalised_quantities,
+            right=self.min_max,
+            how="left",
+            left_index=True,
+            right_index=True
+        )
+        self.loq_table = self.loq_table[cols]
+
+    def _handle_conc_no_norm(self, cols, base_unit):
+        """
+        Handle the concentrations tables
+
+        :param cols: columns to rearrange the dfs
+        :param base_unit: unit to put in unit column
+        :return: None
+        """
+
+        # generate loq_table
+        self.loq_table = self._define_loq(self.concentration_table.copy())
+        # map "ND" to negative and null values
+        self.concentration_table = self.concentration_table.applymap(
+            format
+        )
+        self.loq_table = self.loq_table.mask(
+            self.concentration_table == "ND", "ND"
+        )
+        # add unit column
+        cols.insert(0, "Unit")
+        self.concentration_table["Unit"] = base_unit
+        self.loq_table["Unit"] = base_unit
+        self.concentration_table, self.loq_table = \
+            self.concentration_table[cols], self.loq_table[cols]
+        self.concentration_table = pd.merge(
+            left=self.concentration_table,
+            right=self.min_max,
+            how="left",
+            left_index=True,
+            right_index=True
+        )
 
     def generate_concentrations_table(self, loq_export, base_unit=None):
 
@@ -514,7 +615,8 @@ class Extractor:
 
         # Isolate the C12 data
         concentrations = self.sample_data[
-            ~self.sample_data["Compound"].str.contains("C13")]
+            ~self.sample_data["Compound"].str.contains("C13")
+        ]
         # transpose the data
         self.concentration_table = concentrations.pivot(
             index="Compound",
@@ -522,57 +624,19 @@ class Extractor:
             values="Calculated Amt"
         )
         # Replace nans and nulls with "NA"
-        self.concentration_table.drop(index=list(self.calib_nulls.columns),
-                                      inplace=True)
+        self.concentration_table.drop(
+            index=list(self.calib_nulls.columns),
+            inplace=True
+        )
         # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
         # If metadata detected, normalise the concentrations and do loq,
         # else only do loq
         if self.metadata is not None:
-            # normalise
-            self._generate_normalised_concentrations(new_cols)
-            # map "ND" to negative and null values
-            self.normalised_concentrations = \
-                self.normalised_concentrations.applymap(format)
-            self.loq_table = self.loq_table.mask(
-                self.normalised_concentrations == "ND", "ND")
-            # add unit column
-            self.normalised_concentrations[
-                "unit"] = f"{base_unit}/{self.norm_unit}"
-            self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
-            new_cols.insert(0, "unit")
-            self.normalised_concentrations = self.normalised_concentrations[
-                new_cols]
-            self.normalised_concentrations = pd.merge(
-                left=self.normalised_concentrations,
-                right=self.min_max,
-                how="left",
-                left_index=True,
-                right_index=True
-            )
-            self.loq_table = self.loq_table[new_cols]
+            self._handle_conc_norm(new_cols, base_unit)
         else:
-            # generate loq_table
-            self.loq_table = self._define_loq(self.concentration_table.copy())
-            # map "ND" to negative and null values
-            self.concentration_table = self.concentration_table.applymap(
-                format)
-            self.loq_table = self.loq_table.mask(
-                self.concentration_table == "ND", "ND")
-            # add unit column
-            new_cols.insert(0, "unit")
-            self.concentration_table["unit"] = base_unit
-            self.loq_table["unit"] = base_unit
-            self.concentration_table, self.loq_table = \
-                self.concentration_table[new_cols], self.loq_table[new_cols]
-            self.concentration_table = pd.merge(
-                left=self.concentration_table,
-                right=self.min_max,
-                how="left",
-                left_index=True,
-                right_index=True
-            )
+            self._handle_conc_no_norm(new_cols, base_unit)
         self.loq_table = pd.merge(
             left=self.loq_table,
             right=self.min_max,
@@ -580,22 +644,24 @@ class Extractor:
             left_index=True,
             right_index=True
         )
-
         # Add to export lists
         if self.metadata is not None:
             self.excel_tables.append(
-                ("Normalised_Concentrations", self.normalised_concentrations),
+                ("Quantities", self.quantities)
             )
+            self.excel_tables.append(
+                ("Normalised_Quantities", self.normalised_quantities),
+            )
+            if loq_export:
+                if self.metadata is not None:
+                    self.excel_tables.append(
+                        ("Normalised_Quantities_LLOQ", self.loq_table)
+                    )
         else:
             self.excel_tables.append(
                 ("Concentrations", self.concentration_table),
             )
-        if loq_export:
-            if self.metadata is not None:
-                self.excel_tables.append(
-                    ("Normalised_Concentrations_LLOQ", self.loq_table)
-                )
-            else:
+            if loq_export:
                 self.excel_tables.append(
                     ("Concentrations_LLOQ", self.loq_table)
                 )
@@ -685,24 +751,31 @@ class Extractor:
                                      "Sample_Name")
         base_unit = "12C/13C"
         new_cols = natsorted(self.ratios.columns)
-        new_cols.insert(0, "unit")
+        new_cols.insert(0, "Unit")
         if self.metadata is not None:
-            name = "Normalised_Ratios"
-            self.ratios = self.normalise(self.ratios)
-            self.ratios = self.ratios.applymap(format)
-            self.ratios["unit"] = f"{base_unit}/{self.norm_unit}"
-        else:
-            name = "Ratios"
-            self.ratios = self.ratios.applymap(format)
-            self.ratios["unit"] = base_unit
+            self.normalised_ratios = self.normalise(
+                self.ratios.copy(),
+                multiply=False
+            )
+            self.normalised_ratios = self.normalised_ratios.applymap(format)
+            self.normalised_ratios["Unit"] = f"{base_unit}/{self.norm_unit}"
+            self.normalised_ratios = self.normalised_ratios[new_cols]
+            self.normalised_ratios = self._replace(
+                self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
+            )
+        self.ratios = self.ratios.applymap(format)
+        self.ratios["Unit"] = base_unit
         self.ratios = self.ratios[new_cols]
-        # self.ratios = self.ratios.replace(r'^\s*$', "NA", regex=True)
         self.ratios = self._replace(
             self.ratios, [np.inf, np.nan], "NA", "dataframe"
         )
         self.excel_tables.append(
-            (name, self.ratios)
+            ("Ratios", self.ratios)
         )
+        if self.metadata is not None:
+            self.excel_tables.append(
+                ("Normalised_Ratios", self.normalised_ratios)
+            )
 
     @staticmethod
     def _check_if_std(c12_compounds, c13_compounds):
@@ -831,16 +904,20 @@ class Extractor:
         except PermissionError:
             raise PermissionError(
                 "Permission denied. Please check that the "
-                "good_tables_norm.xlsx file is "
+                "Tables.xlsx file is "
                 "not open so that MS_Reader can overwrite it"
             )
         # Color the sheet to delete
+        sheet_names = []
         if self.metadata is None:
-            sheet_name = "Concentrations"
+            sheet_names.append("Concentrations")
         else:
-            sheet_name = "Normalised_Concentrations"
-        self._color_sheet_tab(sheet_name, str(dest_path))
+            sheet_names.append("Quantities")
+            sheet_names.append("Normalised_Quantities")
+        for sheet in sheet_names:
+            self._color_sheet_tab(sheet, str(dest_path))
 
+        # Export log
         self._output_log(str(path))
         print(f"Done exporting. Path:\n {str(dest_path)}")
 
@@ -972,6 +1049,11 @@ class Extractor:
             ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
+        stat_out["Unit"] = stat_out["Unit"].str.replace(
+            pat="/",
+            repl="_per_",
+            regex=False
+        )
         return stat_out
 
 
