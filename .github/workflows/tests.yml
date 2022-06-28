@@ -1,12 +1,7 @@
 name: Tests
 
-on:
-  push:
-    tags:
-      - run_tests
-  pull_request:
-    types:
-      - closed
+on: [push, pull_request]
+
 jobs:
   test:
     runs-on: ${{ matrix.os}}
