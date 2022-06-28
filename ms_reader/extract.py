@@ -319,14 +319,18 @@ class Extractor:
         min_max_calib = min_max_calib.sort_values(
             ["Compound", "Sample_Name"],
             key=lambda x: np.argsort(
-                index_natsorted(zip(min_max_calib["Compound"],
-                                    min_max_calib["Sample_Name"]))
+                index_natsorted(zip(
+                    min_max_calib["Compound"],
+                    min_max_calib["Sample_Name"]
+                ))
             )
         )
         # Pivot and add the min and max columns
-        min_max_calib = min_max_calib.pivot(index="Compound",
-                                            columns="Sample_Name",
-                                            values="Calculated Amt")
+        min_max_calib = min_max_calib.pivot(
+            index="Compound",
+            columns="Sample_Name",
+            values="Calculated Amt"
+        )
         min_max_calib = min_max_calib.reindex(
             columns=natsorted(min_max_calib.columns)
         )
@@ -350,12 +354,13 @@ class Extractor:
         :return: None
         """
         self._generate_minmax_calib()
-        self.calib_data, self.calib_nulls = self._replace(self.calib_data,
-                                                          to_replace=[np.nan,
-                                                                      0],
-                                                          value="NA",
-                                                          axis="row",
-                                                          drop=True)
+        self.calib_data, self.calib_nulls = self._replace(
+            self.calib_data,
+            to_replace=[np.nan, 0],
+            value="NA",
+            axis="row",
+            drop=True
+        )
         if not self.calib_nulls.empty:
             self.logger.info(
                 f"\nRows removed from the calibration table:"
@@ -371,10 +376,12 @@ class Extractor:
         if self.met_class == "CM":
             qc_mets = ["FruBP", "Oro", "Rib1P"]
             qc_verif = self.qc_data[
-                self.qc_data["Compound"].isin(qc_mets)].copy()
+                self.qc_data["Compound"].isin(qc_mets)
+            ].copy()
         elif self.met_class == "AA" or self.met_class == "CoA":
             qc_verif = self.qc_data[
-                ~self.qc_data["Compound"].str.contains("C13")].copy()
+                ~self.qc_data["Compound"].str.contains("C13")
+            ].copy()
         else:
             raise KeyError(
                 "The selected metabolite class is not valid. "
@@ -385,7 +392,8 @@ class Extractor:
         # Replace commas with dots and convert columns to numeric
         for col in ["%Diff", "Theoretical Amt", "Calculated Amt"]:
             qc_verif[col] = qc_verif[col].apply(
-                lambda x: str(x).replace(",", "."))
+                lambda x: str(x).replace(",", ".")
+            )
             qc_verif[col] = pd.to_numeric(qc_verif[col], errors="coerce")
 
         self.qc_table = qc_verif[
@@ -415,9 +423,11 @@ class Extractor:
 
         # separate 12C and 13C sample data
         c12 = self.sample_data[
-            ~self.sample_data["Compound"].str.contains("C13")].copy()
+            ~self.sample_data["Compound"].str.contains("C13")
+        ].copy()
         c13 = self.sample_data[
-            self.sample_data["Compound"].str.contains("C13")].copy()
+            self.sample_data["Compound"].str.contains("C13")
+        ].copy()
 
         c12_areas = pd.pivot_table(c12, "Area", "Compound", "Sample_Name")
         c13_areas = pd.pivot_table(c13, "Area", "Compound", "Sample_Name")
@@ -427,9 +437,11 @@ class Extractor:
         self.c13_areas = c13_areas[~c13_areas.isin(["Excluded"]).all(axis=1)]
 
         self.excluded_c12_areas = c12_areas[
-            c12_areas.isin(["Excluded"]).all(axis=1)]
+            c12_areas.isin(["Excluded"]).all(axis=1)
+        ]
         self.excluded_c13_areas = c13_areas[
-            c13_areas.isin(["Excluded"]).all(axis=1)]
+            c13_areas.isin(["Excluded"]).all(axis=1)
+        ]
 
         # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
@@ -441,7 +453,7 @@ class Extractor:
         if self.metadata is not None:
             self.norm_c12_areas = self.normalise(self.c12_areas.copy())
             self.norm_c12_areas = self.norm_c12_areas.applymap(format)
-            self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
+            self.norm_c12_areas["Unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
         self.c12_areas = self.c12_areas.applymap(format)
         self.c13_areas = self.c13_areas.applymap(format)
@@ -459,9 +471,6 @@ class Extractor:
             self.excel_tables.append(
                 ("Normalised_C12_areas", self.norm_c12_areas)
             )
-
-    def _color_concentrations(self):
-        pass
 
     def normalise(self, df, multiply=True, divide=True) -> pd.DataFrame:
         """
@@ -554,7 +563,7 @@ class Extractor:
         )
         # add unit column
         self.quantities["Unit"] = base_unit
-        self.normalised_quantities["unit"] = \
+        self.normalised_quantities["Unit"] = \
             f"{base_unit}/{self.norm_unit}"
         self.loq_table["Unit"] = f"{base_unit}/{self.norm_unit}"
         cols.insert(0, "Unit")
@@ -655,7 +664,7 @@ class Extractor:
             if loq_export:
                 if self.metadata is not None:
                     self.excel_tables.append(
-                        ("Normalised_quantities_LLOQ", self.loq_table)
+                        ("Normalised_Quantities_LLOQ", self.loq_table)
                     )
         else:
             self.excel_tables.append(
