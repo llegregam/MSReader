@@ -185,7 +185,7 @@ if data:
     reader.handle_calibration()
 
     if report_box:
-        reader.generate_report()
+        reader.generate_report(metabolites_to_drop)
         if preview:
             with st.expander("Show report"):
                 st.dataframe(reader.calrep)
