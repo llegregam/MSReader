@@ -13,7 +13,6 @@ MIME = "application/vnd.openxmlformats-" \
        "officedocument.spreadsheetml.sheet"
 
 
-@st.cache
 def check_uptodate():
     """Compare installed and most recent package versions."""
     try:
@@ -214,7 +213,7 @@ if data:
                 with st.expander("Show normalised ratios"):
                     st.dataframe(reader.normalised_ratios.apply(df_format))
     if conc_box or lloq_box:
-        reader.generate_concentrations_table(lloq_box)
+        reader.generate_concentrations_table(lloq_box, concentration_unit)
         if conc_box:
             if preview:
                 if reader.metadata is None:
