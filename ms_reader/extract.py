@@ -624,10 +624,11 @@ class Extractor:
             values="Calculated Amt"
         )
         # Replace nans and nulls with "NA"
-        self.concentration_table.drop(
-            index=list(self.calib_nulls.columns),
-            inplace=True
-        )
+        if not self.calib_nulls.empty:
+            self.concentration_table.drop(
+                index=list(self.calib_nulls.columns),
+                inplace=True
+            )
         # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
@@ -857,7 +858,7 @@ class Extractor:
                 result.append("background-color: #ff6666")
             return result
 
-    def generate_report(self):
+    def generate_report(self, mets_to_drop):
 
         if self.calrep is None:
             raise ValueError(
@@ -870,6 +871,11 @@ class Extractor:
         report = report[~report["Compound"].str.contains("C13")]
         report = report.sort_values("Compound")
         report.set_index("Compound", inplace=True)
+        mets_to_drop = [
+            item for item in mets_to_drop
+            if "C13" not in item
+        ]
+        report = report.drop(mets_to_drop)
         self.calrep = report.copy()
         self.calrep["R²"] = self.calrep["R²"].astype(str)
         self.calrep = self.calrep.style.apply(Extractor.check_r, axis=1,
@@ -915,7 +921,12 @@ class Extractor:
             sheet_names.append("Quantities")
             sheet_names.append("Normalised_Quantities")
         for sheet in sheet_names:
-            self._color_sheet_tab(sheet, str(dest_path))
+            try:
+                self._color_sheet_tab(sheet, str(dest_path))
+            except KeyError:
+                pass
+            except Exception:
+                raise
 
         # Export log
         self._output_log(str(path))
