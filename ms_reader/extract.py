@@ -374,7 +374,7 @@ class Extractor:
         """
 
         if self.met_class == "CM":
-            qc_mets = ["FruBP", "Oro", "Rib1P"]
+            qc_mets = ["FruBP", "Orotate", "Rib1P"]
             qc_verif = self.qc_data[
                 self.qc_data["Compound"].isin(qc_mets)
             ].copy()
