@@ -119,6 +119,9 @@ if data:
 
     reader = Extractor(data, report, metadata, qc_type)
 
+    if reader.calib_data.empty:
+        reader.calib_data = None
+
     if qc_type is not None:
         qc_result = reader.handle_qc()
         if not qc_result:
@@ -165,9 +168,15 @@ if data:
         with cln3:
             ratios_box = st.checkbox("Ratios", key="ratios_box")
         with cln4:
-            conc_box = st.checkbox("Concentrations", key="conc_box")
+            conc_box = st.checkbox(
+                "Concentrations", key="conc_box",
+                disabled=True if reader.calib_data is None else False
+            )
         with cln5:
-            lloq_box = st.checkbox("LLOQ", key="lloq_box")
+            lloq_box = st.checkbox(
+                "LLOQ", key="lloq_box",
+                disabled=True if reader.calib_data is None else False
+            )
 
         concentration_unit = st.text_input(
             label="Input the concentration unit"
@@ -181,7 +190,8 @@ if data:
         submit_export = st.form_submit_button("Export selection")
         submit_stat_out = st.form_submit_button("Export stat output")
 
-    reader.handle_calibration()
+    if reader.calib_data is not None:
+        reader.handle_calibration()
 
     if report_box:
         reader.generate_report(metabolites_to_drop)
