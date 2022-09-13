@@ -25,6 +25,7 @@ def mydata(script_location):
     mydata = pd.read_excel(script_location.join("data/test_data.xlsx"))
     return mydata
 
+
 @pytest.fixture
 def no_cal_test_data(script_location):
     no_cal_test_data = pd.read_excel(
