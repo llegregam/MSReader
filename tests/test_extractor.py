@@ -25,6 +25,13 @@ def mydata(script_location):
     mydata = pd.read_excel(script_location.join("data/test_data.xlsx"))
     return mydata
 
+@pytest.fixture
+def no_cal_test_data(script_location):
+    no_cal_test_data = pd.read_excel(
+        script_location.join("data/no_cal/test_data.xlsx")
+    )
+    return no_cal_test_data
+
 
 @pytest.fixture
 def report(script_location):
@@ -214,5 +221,41 @@ class TestExtractor:
         pd.testing.assert_frame_equal(
             good_report,
             msr.qc_table.data,  # We need to access the styler object's data
+            check_names=False
+        )
+
+    def test_no_cal(self, no_cal_test_data, script_location):
+        ms_reader = Extractor(no_cal_test_data)
+        ms_reader.generate_areas_table()
+        ms_reader.generate_ratios()
+        good_c12_areas = pd.read_excel(
+            script_location.join("data/no_cal/Tables.xlsx"),
+            sheet_name="C12_areas",
+            index_col="Compound"
+        )
+        good_c13_areas = pd.read_excel(
+            script_location.join("data/no_cal/Tables.xlsx"),
+            sheet_name="C13_areas",
+            index_col="Compound"
+        )
+        good_ratios = pd.read_excel(
+            script_location.join("data/no_cal/Tables.xlsx"),
+            sheet_name="Ratios",
+            index_col="Compound"
+        )
+        with pytest.raises(AssertionError):
+            pd.testing.assert_frame_equal(
+                good_ratios,
+                ms_reader.ratios,
+                check_names=False
+            )
+        pd.testing.assert_frame_equal(
+            good_c12_areas,
+            ms_reader.c12_areas,
+            check_names=False
+        )
+        pd.testing.assert_frame_equal(
+            good_c13_areas,
+            ms_reader.c13_areas,
             check_names=False
         )
