@@ -278,7 +278,6 @@ class Extractor:
 
     def _split_dataframes_test(self):
 
-
         self.calib_data = self.data[
             self.data["Sample Type"].str.contains("Cal")
         ].copy()
