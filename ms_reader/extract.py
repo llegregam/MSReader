@@ -521,6 +521,9 @@ class Extractor:
         self.normalised_quantities = self.normalised_quantities[columns]
         # define loqs
         self.loq_table = self.normalised_quantities.copy()
+        # Build loq masks
+        lloq_masks = []
+        uloq_masks = []
         for idx in self.loq_table.index:
             lloq_mask = self.concentration_table.loc[idx, :].apply(
                 lambda x: float(x) < self.calib_data.at[idx, "min"]
@@ -528,12 +531,18 @@ class Extractor:
             uloq_mask = self.concentration_table.loc[idx, :].apply(
                 lambda x: float(x) > self.calib_data.at[idx, "max"]
             )
-            self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(
-                ~lloq_mask, other="<LLOQ"
-            )
-            self.loq_table.loc[idx, :] = self.loq_table.loc[idx, :].where(
-                ~uloq_mask, other=">ULOQ"
-            )
+            lloq_masks.append(lloq_mask)
+            uloq_masks.append(uloq_mask)
+        # Transpose dfs because concentrentration tables are wrong way round
+        lloq_mask = pd.concat(lloq_masks, axis=1).transpose()
+        uloq_mask = pd.concat(uloq_masks, axis=1).transpose()
+        # Apply masks
+        self.loq_table = self.loq_table.mask(
+            lloq_mask == True, "<LLOQ"
+        )
+        self.loq_table = self.loq_table.mask(
+            uloq_mask == True, ">ULOQ"
+        )
 
     def _handle_conc_norm(self, cols, base_unit):
         """
@@ -1085,16 +1094,3 @@ class QCError(Error):
     def __init__(self, message):
         self.message = message
 
-
-if __name__ == "__main__":
-    test = Extractor(
-        r"C:\Users\legregam\Documents\Projets\MSReader\
-        data\20210506_SOKOL_filtres_MC_quant.xlsx",
-        None, "AA")
-    qc_result = test.handle_qc()
-
-    # r"C:\Users\legregam\Documents\Projets\MSReader\data\Calibration
-    # Report.xlsx", r"C:\Users\legregam\Documents\Projets\MSReader\data
-    # \Sample_List_test.xlsx", data.handle_calibration()
-    # data.generate_concentrations_table(True) data.generate_report()
-    # data.get_ratios()
