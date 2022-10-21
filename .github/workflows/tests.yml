@@ -4,6 +4,8 @@ on:
   pull_request:
     types:
       - opened
+    paths:
+      - '**.py'
 
 jobs:
   test:
