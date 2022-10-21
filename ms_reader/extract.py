@@ -538,10 +538,10 @@ class Extractor:
         uloq_mask = pd.concat(uloq_masks, axis=1).transpose()
         # Apply masks
         self.loq_table = self.loq_table.mask(
-            lloq_mask == True, "<LLOQ"
+            lloq_mask == 1, "<LLOQ"
         )
         self.loq_table = self.loq_table.mask(
-            uloq_mask == True, ">ULOQ"
+            uloq_mask == 1, ">ULOQ"
         )
 
     def _handle_conc_norm(self, cols, base_unit):
@@ -1093,4 +1093,3 @@ class QCError(Error):
 
     def __init__(self, message):
         self.message = message
-
