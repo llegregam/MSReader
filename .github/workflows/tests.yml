@@ -3,9 +3,7 @@ name: Tests
 on:
   pull_request:
     types:
-      - opened
-    paths:
-      - '**.py'
+      - [opened, synchronize]
 
 jobs:
   test:
