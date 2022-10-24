@@ -63,19 +63,6 @@ class Extractor:
 
         self.data["Sample_Name"] = self.data["Filename"]
 
-        # If metadata file is given, check that the sample names are the
-        # same as in the data
-        if self.metadata is not None:
-            if natsorted(list(self.metadata.Sample_Name)) \
-                    != natsorted(list(self.data.Sample_Name.unique())):
-                raise ValueError("The Sample names in the data and metadata "
-                                 "do not correspond. Please check them and "
-                                 "try again.")
-
-            self.metadata.set_index("Sample_Name", inplace=True)
-            self._check_metadata_columns()
-            self.excel_tables.append(("Metadata", self.metadata))
-
         self.data.drop("Filename", axis=1, inplace=True)
         columns = [
             "Compound", "Sample_Name", "Area", "Sample Type",
@@ -85,6 +72,20 @@ class Extractor:
         self.data = self.data[columns]
         self._replace_nf()
         self._split_dataframes_test()
+
+        # If metadata file is given, check that the sample names are the
+        # same as in the data
+        if self.metadata is not None:
+            if natsorted(list(self.metadata.Sample_Name)) \
+                    != natsorted(list(self.sample_data.Sample_Name.unique())):
+                raise ValueError("The Sample names in the data and metadata "
+                                 "do not correspond. Please check them and "
+                                 "try again.")
+
+            self.metadata.set_index("Sample_Name", inplace=True)
+            self._check_metadata_columns()
+            self.excel_tables.append(("Metadata", self.metadata))
+
         self._get_excluded()
 
         self.met_class = met_class
@@ -184,7 +185,7 @@ class Extractor:
             cols.append(f"Norm{i}")
             cols.append(f"Norm{i}_Unit")
         metadata = pd.DataFrame(columns=cols)
-        metadata["Sample_Name"] = natsorted(self.data["Sample_Name"].unique())
+        metadata["Sample_Name"] = natsorted(self.sample_data["Sample_Name"].unique())
         metadata.set_index("Sample_Name", inplace=True)
         metadata["Volume_Unit"] = "µL"
         return metadata
