@@ -1060,7 +1060,6 @@ class Extractor:
                 c13_areas.insert(1, "type", "C13 area")
                 to_out.append(c13_areas)
 
-
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
                 self.loq_table, pd.DataFrame):
             concentrations = self.loq_table.drop(
