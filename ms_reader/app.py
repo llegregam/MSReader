@@ -164,12 +164,20 @@ if data:
                 disabled=True if reader.calrep is None else False
             )
         with cln2:
-            areas_box = st.checkbox("Areas", key="areas_box")
+            areas_box = st.checkbox(
+                "Areas",
+                key="areas_box"
+            )
         with cln3:
-            ratios_box = st.checkbox("Ratios", key="ratios_box")
+            ratios_box = st.checkbox(
+                "Ratios",
+                key="ratios_box",
+                disabled=True if reader.c13_areas.empty else False
+            )
         with cln4:
             conc_box = st.checkbox(
-                "Concentrations", key="conc_box",
+                "Concentrations" if reader.metadata is None else "Quantities",
+                key="conc_box",
                 disabled=True if reader.calib_data is None else False
             )
         with cln5:
@@ -206,11 +214,12 @@ if data:
                 if not reader.excluded_c12_areas.empty:
                     st.write("Some metabolites were excluded:")
                     st.dataframe(reader.excluded_c12_areas)
-            with st.expander("Show C13 Areas"):
-                st.dataframe(reader.c13_areas.apply(df_format))
-                if not reader.excluded_c13_areas.empty:
-                    st.write("Some metabolites were excluded:")
-                    st.dataframe(reader.excluded_c13_areas)
+            if not reader.c13_areas.empty:
+                with st.expander("Show C13 Areas"):
+                    st.dataframe(reader.c13_areas.apply(df_format))
+                    if not reader.excluded_c13_areas.empty:
+                        st.write("Some metabolites were excluded:")
+                        st.dataframe(reader.excluded_c13_areas)
             if reader.metadata is not None:
                 with st.expander("Show normalised 12C Areas"):
                     st.dataframe(reader.norm_c12_areas.apply(df_format))

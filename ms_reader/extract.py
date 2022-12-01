@@ -25,8 +25,6 @@ class Extractor:
         self.qc_table = None
         self.excluded_c13_areas = None
         self.excluded_c12_areas = None
-        self.c13_areas = None
-        self.c12_areas = None
         self.ratios = None
         self.no_ratio = None
         self.cal_nulls = None
@@ -69,7 +67,7 @@ class Extractor:
             "Calculated Amt", "Theoretical Amt",
             "Response Ratio", "Excluded", "%Diff"
         ]
-        self.data = self.data[columns]
+        self.data = self.data[columns].copy()
         self._replace_nf()
         self._split_dataframes_test()
 
@@ -89,6 +87,14 @@ class Extractor:
         self._get_excluded()
 
         self.met_class = met_class
+
+        # separate 12C and 13C sample data
+        self.c12_areas = self.sample_data[
+            ~self.sample_data["Compound"].str.contains("C13")
+        ].copy()
+        self.c13_areas = self.sample_data[
+            self.sample_data["Compound"].str.contains("C13")
+        ].copy()
 
     @property
     def norm_unit(self):
@@ -119,9 +125,23 @@ class Extractor:
                                  f"columns")
         md_values_cols = ["Resuspension_Volume"]
         md_unit_cols = ["Volume_Unit"]
-        # Check if there are other normalisations to make,
-        # and if so if they are well paired
+
         if len(self.metadata.columns) > 2:
+            # Remove columns if only NA are present
+            indexes = []
+            for col in self.metadata.columns[2:]:
+                if "Unit" not in col:
+                    if self.metadata[col].isnull().values.all():
+                        col_num = self.metadata.columns.get_loc(col)
+                        indexes.append(col_num)
+                        indexes.append(col_num+1)
+            if indexes:
+                self.metadata.drop(
+                    self.metadata.columns[indexes], axis=1, inplace=True
+                )
+
+            # Check if there are other normalisations to make,
+            # and if so if they are well paired
             col_nums = []
             number_cols = int((len(self.metadata.columns) - 2) / 2)
             for x in range(1, number_cols + 1):
@@ -423,26 +443,18 @@ class Extractor:
         :return: None
         """
 
-        # separate 12C and 13C sample data
-        c12 = self.sample_data[
-            ~self.sample_data["Compound"].str.contains("C13")
-        ].copy()
-        c13 = self.sample_data[
-            self.sample_data["Compound"].str.contains("C13")
-        ].copy()
-
-        c12_areas = pd.pivot_table(c12, "Area", "Compound", "Sample_Name")
-        c13_areas = pd.pivot_table(c13, "Area", "Compound", "Sample_Name")
+        self.c12_areas = pd.pivot_table(self.c12_areas, "Area", "Compound", "Sample_Name")
+        self.c13_areas = pd.pivot_table(self.c13_areas, "Area", "Compound", "Sample_Name")
 
         # get rid of rows where all data points are excluded
-        self.c12_areas = c12_areas[~c12_areas.isin(["Excluded"]).all(axis=1)]
-        self.c13_areas = c13_areas[~c13_areas.isin(["Excluded"]).all(axis=1)]
+        self.c12_areas = self.c12_areas[~self.c12_areas.isin(["Excluded"]).all(axis=1)]
+        self.c13_areas = self.c13_areas[~self.c13_areas.isin(["Excluded"]).all(axis=1)]
 
-        self.excluded_c12_areas = c12_areas[
-            c12_areas.isin(["Excluded"]).all(axis=1)
+        self.excluded_c12_areas = self.c12_areas[
+            self.c12_areas.isin(["Excluded"]).all(axis=1)
         ]
-        self.excluded_c13_areas = c13_areas[
-            c13_areas.isin(["Excluded"]).all(axis=1)
+        self.excluded_c13_areas = self.c13_areas[
+            self.c13_areas.isin(["Excluded"]).all(axis=1)
         ]
 
         # rearrange and normalise
@@ -1036,16 +1048,19 @@ class Extractor:
                 self.c13_areas, pd.DataFrame):
             c12_areas = self._replace(self.c12_areas, [0, np.inf, "", "ND"],
                                       "NA", "dataframe")
-            c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"],
-                                      "NA", "dataframe")
             c12_areas = c12_areas.reset_index()
-            c13_areas = c13_areas.reset_index()
             c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
-            c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
-            c13_areas.insert(1, "type", "C13 area")
             to_out.append(c12_areas)
-            to_out.append(c13_areas)
+            if not self.c13_areas.empty:
+                c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"],
+                                          "NA", "dataframe")
+                c13_areas = c13_areas.reset_index()
+                c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
+                c13_areas.insert(1, "type", "C13 area")
+                to_out.append(c13_areas)
+
+
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
                 self.loq_table, pd.DataFrame):
             concentrations = self.loq_table.drop(
