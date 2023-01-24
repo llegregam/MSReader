@@ -460,21 +460,21 @@ class Extractor:
         # rearrange and normalise
         c12_cols = natsorted(self.c12_areas.columns)
         c13_cols = natsorted(self.c13_areas.columns)
-        c12_cols.insert(0, "Unit")
-        c13_cols.insert(0, "Unit")
+        c12_cols.insert(0, "unit")
+        c13_cols.insert(0, "unit")
         base_unit = "area"
 
         # Normalise c12 data
         if self.metadata is not None:
             self.norm_c12_areas = self.normalise(self.c12_areas.copy())
             self.norm_c12_areas = self.norm_c12_areas.applymap(format)
-            self.norm_c12_areas["Unit"] = f"{base_unit}/{self.norm_unit}"
+            self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
 
         self.c12_areas = self.c12_areas.applymap(format)
         self.c13_areas = self.c13_areas.applymap(format)
-        self.c12_areas["Unit"] = base_unit
-        self.c13_areas["Unit"] = base_unit
+        self.c12_areas["unit"] = base_unit
+        self.c13_areas["unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
         self.c13_areas = self.c13_areas[c13_cols]
 
@@ -576,10 +576,10 @@ class Extractor:
         )
         # add unit column
         self.quantities["Unit"] = base_unit
-        self.normalised_quantities["Unit"] = \
+        self.normalised_quantities["unit"] = \
             f"{base_unit}/{self.norm_unit}"
-        self.loq_table["Unit"] = f"{base_unit}/{self.norm_unit}"
-        cols.insert(0, "Unit")
+        self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
+        cols.insert(0, "unit")
         self.quantities = self.quantities[cols]
         self.normalised_quantities = self.normalised_quantities[cols]
         self.quantities = pd.merge(
@@ -617,9 +617,9 @@ class Extractor:
             self.concentration_table == "ND", "ND"
         )
         # add unit column
-        cols.insert(0, "Unit")
-        self.concentration_table["Unit"] = base_unit
-        self.loq_table["Unit"] = base_unit
+        cols.insert(0, "unit")
+        self.concentration_table["unit"] = base_unit
+        self.loq_table["unit"] = base_unit
         self.concentration_table, self.loq_table = \
             self.concentration_table[cols], self.loq_table[cols]
         self.concentration_table = pd.merge(
@@ -774,20 +774,20 @@ class Extractor:
                                      "Sample_Name")
         base_unit = "12C/13C"
         new_cols = natsorted(self.ratios.columns)
-        new_cols.insert(0, "Unit")
+        new_cols.insert(0, "unit")
         if self.metadata is not None:
             self.normalised_ratios = self.normalise(
                 self.ratios.copy(),
                 multiply=False
             )
             self.normalised_ratios = self.normalised_ratios.applymap(format)
-            self.normalised_ratios["Unit"] = f"{base_unit}/{self.norm_unit}"
+            self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
             self.normalised_ratios = self.normalised_ratios[new_cols]
             self.normalised_ratios = self._replace(
                 self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
             )
         self.ratios = self.ratios.applymap(format)
-        self.ratios["Unit"] = base_unit
+        self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
         self.ratios = self._replace(
             self.ratios, [np.inf, np.nan], "NA", "dataframe"
@@ -1049,14 +1049,14 @@ class Extractor:
             c12_areas = self._replace(self.c12_areas, [0, np.inf, "", "ND"],
                                       "NA", "dataframe")
             c12_areas = c12_areas.reset_index()
-            c12_areas = c12_areas.rename({"Compound": "Features"}, axis=1)
+            c12_areas = c12_areas.rename({"Compound": "features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
             to_out.append(c12_areas)
             if not self.c13_areas.empty:
                 c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"],
                                           "NA", "dataframe")
                 c13_areas = c13_areas.reset_index()
-                c13_areas = c13_areas.rename({"Compound": "Features"}, axis=1)
+                c13_areas = c13_areas.rename({"Compound": "features"}, axis=1)
                 c13_areas.insert(1, "type", "C13 area")
                 to_out.append(c13_areas)
 
@@ -1073,7 +1073,7 @@ class Extractor:
             concentrations = self._replace(concentrations, "", "NA",
                                            "dataframe")
             concentrations = concentrations.reset_index()
-            concentrations = concentrations.rename({"Compound": "Features"},
+            concentrations = concentrations.rename({"Compound": "features"},
                                                    axis=1)
             concentrations.insert(1, "type", "concentration")
             to_out.append(concentrations)
@@ -1081,11 +1081,11 @@ class Extractor:
             ratios = self.ratios.reset_index()
             ratios = self._replace(ratios, [np.inf, np.nan, "", "ND"], "NA",
                                    "dataframe")
-            ratios = ratios.rename({"Compound": "Features"}, axis=1)
+            ratios = ratios.rename({"Compound": "features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
         stat_out = pd.concat(to_out)
-        stat_out["Unit"] = stat_out["Unit"].str.replace(
+        stat_out["unit"] = stat_out["unit"].str.replace(
             pat="/",
             repl="_per_",
             regex=False
