@@ -575,7 +575,7 @@ class Extractor:
             self.normalised_quantities == "ND", "ND"
         )
         # add unit column
-        self.quantities["Unit"] = base_unit
+        self.quantities["unit"] = base_unit
         self.normalised_quantities["unit"] = \
             f"{base_unit}/{self.norm_unit}"
         self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
@@ -1059,7 +1059,6 @@ class Extractor:
                 c13_areas = c13_areas.rename({"Compound": "features"}, axis=1)
                 c13_areas.insert(1, "type", "C13 area")
                 to_out.append(c13_areas)
-
 
         if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
                 self.loq_table, pd.DataFrame):
