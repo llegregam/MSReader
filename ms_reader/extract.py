@@ -575,7 +575,7 @@ class Extractor:
             self.normalised_quantities == "ND", "ND"
         )
         # add unit column
-        self.quantities["Unit"] = base_unit
+        self.quantities["unit"] = base_unit
         self.normalised_quantities["unit"] = \
             f"{base_unit}/{self.norm_unit}"
         self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
