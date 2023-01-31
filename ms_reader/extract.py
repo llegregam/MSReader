@@ -327,7 +327,7 @@ class Extractor:
             self.calib_data["Excluded"] == "True", "Calculated Amt"
         ] = "Excluded"
         self.calib_data.loc[
-            self.calib_data["Excluded"] == True, "Calculated Amt"
+            self.calib_data["Excluded"] == True, "Calculated Amt"  # noqa: E712
         ] = "Excluded"
 
     def _generate_minmax_calib(self):
