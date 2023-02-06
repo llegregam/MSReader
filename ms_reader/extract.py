@@ -469,7 +469,9 @@ class Extractor:
 
         # Normalise c12 data
         if self.metadata is not None:
-            self.norm_c12_areas = self.normalise(self.c12_areas.copy())
+            self.norm_c12_areas = self.normalise(
+                self.c12_areas.copy(), False
+            )
             self.norm_c12_areas = self.norm_c12_areas.applymap(format)
             self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
