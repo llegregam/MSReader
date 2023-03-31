@@ -197,6 +197,7 @@ if data:
         preview = st.form_submit_button("Preview")
         submit_export = st.form_submit_button("Export selection")
         submit_stat_out = st.form_submit_button("Export stat output")
+        submit_pca_out = st.form_submit_button("Export stat output for PCA")
 
     if reader.calib_data is not None:
         reader.handle_calibration()
@@ -264,4 +265,9 @@ if data:
         st.success("The final excel has been generated")
     if submit_stat_out:
         reader.export_stat_output(destination)
-        st.success("The output for the stat object has been generated")
+        st.success("The input for GraphStatR has been generated")
+    if submit_pca_out:
+        reader.export_stat_output(destination, pca=True)
+        if conc_box or lloq_box:
+            st.warning("**WARNING:** The PCA output only exports areas and ratios")
+        st.success("The input for GraphStatR has been generated (PCA mode)")

@@ -69,7 +69,7 @@ class Extractor:
         ]
         self.data = self.data[columns].copy()
         self._replace_nf()
-        self._split_dataframes_test()
+        self._split_dataframes()
 
         # If metadata file is given, check that the sample names are the
         # same as in the data
@@ -283,19 +283,19 @@ class Extractor:
 
         self.calib_data = self.data[
             self.data["Sample Type"].str.contains("Cal")
-        ]
+        ].copy()
         self.sample_data = self.data[
             self.data["Sample Type"].str.contains("Unknown")
-        ]
+        ].copy()
         self.qc_data = self.data[
             self.data["Sample Type"].str.contains("QC")
-        ]
+        ].copy()
         self.anal_blank = self.data[
             self.data["Sample Type"].str.contains("Solvent")
-        ]
+        ].copy()
         self.data_blank = self.data[
             self.data["Sample Type"].str.contains("Matrix Blank")
-        ]
+        ].copy()
 
     def _split_dataframes_test(self):
 
@@ -918,11 +918,11 @@ class Extractor:
         with open(f"{destination}\\file.log", "w") as log:
             print(self.stream.getvalue(), file=log)
 
-    def export_stat_output(self, path):
+    def export_stat_output(self, path, pca=False):
 
         dest = Path(path)
         dest = dest / "output_for_graphstat.tsv"
-        stat_out = self._build_stat_output()
+        stat_out = self._build_stat_output(pca)
         stat_out.to_csv(str(dest), sep="\t", index=False, encoding='utf-8-sig')
         self._output_log(path)
 
@@ -1032,7 +1032,7 @@ class Extractor:
                 if axis == "dataframe":
                     df.replace(
                         to_replace=to_replace,
-                        value="NA",
+                        value=value,
                         inplace=True)
         if drop:
             try:
@@ -1046,48 +1046,59 @@ class Extractor:
         else:
             return df
 
-    def _build_stat_output(self):
+    def _build_stat_output(self, pca):
 
         to_out = []
         if isinstance(self.c12_areas, pd.DataFrame) and isinstance(
                 self.c13_areas, pd.DataFrame):
-            c12_areas = self._replace(self.c12_areas, [0, np.inf, "", "ND"],
-                                      "NA", "dataframe")
+            if pca:
+                c12_areas = self._replace(self.c12_areas, ["NA", np.inf, "", "ND"], 0, "dataframe")
+            else:
+                c12_areas = self._replace(self.c12_areas, [0, np.inf, "", "ND"], "NA", "dataframe")
             c12_areas = c12_areas.reset_index()
             c12_areas = c12_areas.rename({"Compound": "features"}, axis=1)
             c12_areas.insert(1, "type", "C12 area")
             to_out.append(c12_areas)
             if not self.c13_areas.empty:
-                c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"],
-                                          "NA", "dataframe")
+                if pca:
+                    c13_areas = self._replace(self.c12_areas, ["NA", np.inf, "", "ND"], 0, "dataframe")
+                else:
+                    c13_areas = self._replace(self.c13_areas, [0, np.inf, "", "ND"], "NA", "dataframe")
                 c13_areas = c13_areas.reset_index()
                 c13_areas = c13_areas.rename({"Compound": "features"}, axis=1)
                 c13_areas.insert(1, "type", "C13 area")
                 to_out.append(c13_areas)
 
-        if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
-                self.loq_table, pd.DataFrame):
-            concentrations = self.loq_table.drop(
-                ["LLOQ", "ULOQ"], axis=1
-            ).copy()
-            concentrations = self._replace(concentrations, ["<LLOQ", "ND"],
-                                           "NA", "dataframe")
-            concentrations = self._replace(concentrations, [">ULOQ", "ND"],
-                                           "NA", "dataframe")
-            concentrations = self._replace(concentrations, "", "NA",
-                                           "dataframe")
-            concentrations = concentrations.reset_index()
-            concentrations = concentrations.rename({"Compound": "features"},
-                                                   axis=1)
-            concentrations.insert(1, "type", "concentration")
-            to_out.append(concentrations)
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
-            ratios = self._replace(ratios, [np.inf, np.nan, "", "ND"], "NA",
-                                   "dataframe")
+            if pca:
+                ratios = self._replace(ratios, ["NA", np.inf, np.nan, "", "ND"], 0, "dataframe")
+            else:
+                ratios = self._replace(ratios, [np.inf, np.nan, "", "ND"], "NA", "dataframe")
             ratios = ratios.rename({"Compound": "features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
+
+        if not pca:
+            if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
+                    self.loq_table, pd.DataFrame):
+                concentrations = self.loq_table.drop(
+                    ["LLOQ", "ULOQ"], axis=1
+                ).copy()
+                concentrations = self._replace(concentrations, ["<LLOQ", "ND"],
+                                               "NA", "dataframe")
+                concentrations = self._replace(concentrations, [">ULOQ", "ND"],
+                                               "NA", "dataframe")
+                concentrations = self._replace(concentrations, "", "NA",
+                                               "dataframe")
+                concentrations = concentrations.reset_index()
+                concentrations = concentrations.rename({"Compound": "features"},
+                                                       axis=1)
+                concentrations.insert(1, "type", "concentration")
+                to_out.append(concentrations)
+
+        # if isinstance(self.quantities)
+
         stat_out = pd.concat(to_out)
         stat_out["unit"] = stat_out["unit"].str.replace(
             pat="/",
