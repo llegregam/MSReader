@@ -1,4 +1,4 @@
-name: Tests
+name: Launch tests
 
 on:
   pull_request:
@@ -25,5 +25,3 @@ jobs:
           pip install tox tox-gh-actions
       - name: Test with tox
         run: tox
-
-
