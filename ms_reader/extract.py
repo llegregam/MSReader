@@ -1069,6 +1069,16 @@ class Extractor:
                 c13_areas.insert(1, "type", "C13 area")
                 to_out.append(c13_areas)
 
+        if isinstance(self.norm_c12_areas, pd.DataFrame):
+            if pca:
+                norm_c12_areas = self._replace(self.norm_c12_areas, ["NA", np.inf, "", "ND"], 0, "dataframe")
+            else:
+                norm_c12_areas = self._replace(self.norm_c12_areas, [0, np.inf, "", "ND"], "NA", "dataframe")
+            norm_c12_areas = norm_c12_areas.reset_index()
+            norm_c12_areas = norm_c12_areas.rename({"Compound": "features"}, axis=1)
+            norm_c12_areas.insert(1, "type", "Normalised C12 area")
+            to_out.append(norm_c12_areas)
+
         if isinstance(self.ratios, pd.DataFrame):
             ratios = self.ratios.reset_index()
             if pca:
@@ -1078,6 +1088,16 @@ class Extractor:
             ratios = ratios.rename({"Compound": "features"}, axis=1)
             ratios.insert(1, "type", "C12/C13 ratios")
             to_out.append(ratios)
+
+        if isinstance(self.normalised_ratios, pd.DataFrame):
+            norm_ratios = self.normalised_ratios.reset_index()
+            if pca:
+                norm_ratios = self._replace(norm_ratios, ["NA", np.inf, np.nan, "", "ND"], 0, "dataframe")
+            else:
+                norm_ratios = self._replace(norm_ratios, [np.inf, np.nan, "", "ND"], "NA", "dataframe")
+            norm_ratios = norm_ratios.rename({"Compound": "features"}, axis=1)
+            norm_ratios.insert(1, "type", "Normalised C12/C13 ratios")
+            to_out.append(norm_ratios)
 
         if not pca:
             if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
@@ -1094,7 +1114,12 @@ class Extractor:
                 concentrations = concentrations.reset_index()
                 concentrations = concentrations.rename({"Compound": "features"},
                                                        axis=1)
-                concentrations.insert(1, "type", "concentration")
+                if isinstance(self.quantities, pd.DataFrame) and not isinstance(self.normalised_quantities, pd.DataFrame):
+                    concentrations.insert(1, "type", "Quantity")
+                elif isinstance(self.normalised_quantities, pd.DataFrame):
+                    concentrations.insert(1, "type", "Normalised quantity")
+                elif isinstance(self.concentration_table, pd.DataFrame):
+                    concentrations.insert(1, "type", "Concentration")
                 to_out.append(concentrations)
 
         # if isinstance(self.quantities)
