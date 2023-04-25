@@ -200,10 +200,17 @@ if data:
         submit_pca_out = st.form_submit_button("Export stat output for PCA")
 
     if reader.calib_data is not None:
-        reader.handle_calibration()
-
+        try:
+            reader.handle_calibration()
+        except Exception as e:
+            st.error("There was an error while handling the calibration data")
+            raise
     if report_box:
-        reader.generate_report(metabolites_to_drop)
+        try:
+            reader.generate_report(metabolites_to_drop)
+        except Exception as e:
+            st.error("There was an error while generating the report")
+            raise
         if preview:
             with st.expander("Show report"):
                 st.dataframe(reader.calrep)

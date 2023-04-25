@@ -921,7 +921,7 @@ class Extractor:
     def export_stat_output(self, path, pca=False):
 
         dest = Path(path)
-        dest = dest / "output_for_graphstat.tsv"
+        dest = dest / "output_for_graphstat.tsv" if not pca else dest / "ouptput_for_graphstat_PCA.tsv"
         stat_out = self._build_stat_output(pca)
         stat_out.to_csv(str(dest), sep="\t", index=False, encoding='utf-8-sig')
         self._output_log(path)
