@@ -1,4 +1,4 @@
-"""Module containing the parser for tracefinder data and handling all the
+"""Module containing the parser for TraceFinder data and handling all the
 logic of MS_Reader """
 
 import io
@@ -65,7 +65,7 @@ class Extractor:
         columns = [
             "Compound", "Sample_Name", "Area", "Sample Type",
             "Calculated Amt", "Theoretical Amt",
-            "Response Ratio", "Excluded", "%Diff"
+            "Excluded", "%Diff"
         ]
         self.data = self.data[columns].copy()
         self._replace_nf()
@@ -425,6 +425,8 @@ class Extractor:
         ]
         self.qc_table.set_index("Compound", inplace=True)
 
+        print(self.qc_table)
+
         # QC is set to have a difference between sample point
         # and QC of 20% maximum
         if (abs(qc_verif["%Diff"].values) > 20).any():
@@ -433,9 +435,15 @@ class Extractor:
             qc = True
         self.qc_table = self.qc_table.astype(str)
 
+        # print(self.qc_table)
+        # print(self.qc_table.columns[self.qc_table.columns.duplicated(keep=False)])
+        # print(self.qc_table.index[self.qc_table.index.duplicated(keep=False)])
+        self.qc_table.index = \
+            self.qc_table.index.drop_duplicates(keep="first")
         self.qc_table = self.qc_table.style.apply(self._color_qc, axis=1,
                                                   subset=["%Diff"])
-
+        print(self.qc_table.columns[self.qc_table.columns.duplicated(keep=False)])
+        print(self.qc_table.index[self.qc_table.index.duplicated(keep=False)])
         self.excel_tables.append(("Quality Control", self.qc_table))
         return qc
 
