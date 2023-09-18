@@ -6,6 +6,7 @@ import pandas as pd
 
 from extract import Extractor
 from ms_reader import __version__, __file__
+from ms_reader.skyline_convert import convert_skyline_input
 
 # Constants
 EXCEL_ENGINE = "openpyxl"
@@ -59,19 +60,29 @@ st.set_page_config(page_title=f"MS_Reader (v{__version__})")
 st.title(f"Welcome to MS_Reader (v{__version__})")
 check_uptodate()
 
+skyline = st.checkbox(
+    label="Skyline input",
+    value=False,
+    help="Check box if input is a skyline output file"
+)
+
+
 st.subheader("Select input files")
 col1, col2, col3 = st.columns(3)
 with col1:
     data = st.file_uploader("Upload Data")
 with col2:
-    report = st.file_uploader("Upload Report File (optional)")
+    report = st.file_uploader("Upload Report File (optional)", disabled=True if skyline else False)
 with col3:
     metadata = st.file_uploader("Upload Metadata (optional)")
 
 if data:
 
-    # noinspection PyArgumentList
-    data = pd.read_excel(io=data, engine=EXCEL_ENGINE)
+    if skyline:
+        data = convert_skyline_input(data)
+    else:
+        # noinspection PyArgumentList
+        data = pd.read_excel(io=data, engine=EXCEL_ENGINE)
 
     # Add way to drop metabolites from data
     with st.expander("Click to open metabolite remover"):
