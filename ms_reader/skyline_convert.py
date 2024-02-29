@@ -2,6 +2,8 @@
 Converter to convert the skyline input to MS_Reader format
 """
 
+from copy import copy
+
 import pandas as pd
 import numpy as np
 
@@ -62,9 +64,13 @@ def handle_na(row):
             print(f"Area value = {row['Area']}\nCalculated Amt value = {row['Calculated Amt']}")
     return row
 
-def convert_skyline_input(skyline_file):
+def main(skyline_file):
     try:
+        # Get copy of file binary to dodge any wierd effects when file is read twice by pandas
+        file = copy(skyline_file)
         data = pd.read_csv(skyline_file, sep=",")
+        if len(data.columns) == 1:
+            data = pd.read_csv(file, sep=";")
         data = convert_column_names(data)
         data["Sample Type"] = data["Sample Type"].apply(convert_sample_types)
         data["%Diff"] = data["%Diff"].apply(convert_accuracy_to_diff).fillna("N/A")
@@ -91,5 +97,5 @@ if __name__ == "__main__":
     #converted_df["Calculated Amt"] = converted_df["Calculated Amt"].apply(convert_calculated_amt)
     #converted_df = converted_df.apply(handle_na, axis=1)
     #converted_df.to_excel(r"C:\Users\legregam\Desktop\test\test.xlsx", index=False)
-    data = convert_skyline_input(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
+    data = main(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
     data.to_excel(r"C:\Users\legregam\Desktop\test\test2.xlsx")
