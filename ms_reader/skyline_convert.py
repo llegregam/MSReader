@@ -70,8 +70,10 @@ def convert_skyline_input(skyline_file):
         data["%Diff"] = data["%Diff"].apply(convert_accuracy_to_diff).fillna("N/A")
         data["Calculated Amt"] = data["Calculated Amt"].apply(convert_calculated_amt)
         data = data.apply(handle_na, axis=1)
+    except KeyError:
+        raise ValueError("There seems to be an error while parsing file. Please make sure your data is comma separated.")
     except Exception:
-        raise
+        raise RuntimeError("Unkown error while converting the skyline intput file.")
     return data
 
 if __name__ == "__main__":
