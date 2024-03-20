@@ -6,7 +6,7 @@ import pandas as pd
 
 from extract import Extractor
 from ms_reader import __version__, __file__
-from ms_reader.skyline_convert import convert_skyline_input
+from ms_reader.skyline_convert import import_skyline_dataset
 
 # Constants
 EXCEL_ENGINE = "openpyxl"
@@ -79,7 +79,7 @@ with col3:
 if data:
 
     if skyline:
-        data = convert_skyline_input(data)
+        data = import_skyline_dataset(data)
     else:
         # noinspection PyArgumentList
         data = pd.read_excel(io=data, engine=EXCEL_ENGINE)
