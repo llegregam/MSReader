@@ -2,7 +2,7 @@
 Converter to convert the skyline input to MS_Reader format
 """
 
-from copy import copy
+import re
 
 import pandas as pd
 import numpy as np
@@ -41,9 +41,7 @@ def convert_accuracy_to_diff(value):
 def convert_calculated_amt(value):
 
     if type(value) == str:
-        if "Normalized Area" in value:
-            return np.nan
-        if "NaN" in value:
+        if "Normalized Area" in value or "NaN" in value:
             return np.nan
         return float(str(value).replace(" uM", ""))
 
@@ -64,22 +62,35 @@ def handle_na(row):
             print(f"Area value = {row['Area']}\nCalculated Amt value = {row['Calculated Amt']}")
     return row
 
-def main(skyline_file):
+def import_skyline_dataset(skyline_file):
+    """
+    Import skyline dataset and transform into MS_Reader compatible format
+
+    :param skyline_file: Bytes file containing skyline data (tabular format)
+    """
+
+    # Get copy of file binary to dodge any wierd effects when file is read twice by pandas
+    #file = copy(skyline_file)
+    filename_extension = skyline_file.name[-3:]
+    if filename_extension not in ["tsv", "txt"]:
+        raise TypeError(
+            f"Skyline data must be in tabulated format with 'tsv' or 'txt' extension. "
+            f"Detected extension: {filename_extension}"
+        )
+
+    data = pd.read_csv(skyline_file, sep="\t")
+    #if len(data.columns) == 1:
+    #    data = pd.read_csv(file, sep="\t")
+    data = convert_column_names(data)
+    data["Sample Type"] = data["Sample Type"].apply(convert_sample_types)
+    data["%Diff"] = data["%Diff"].apply(convert_accuracy_to_diff).fillna("N/A")
     try:
-        # Get copy of file binary to dodge any wierd effects when file is read twice by pandas
-        file = copy(skyline_file)
-        data = pd.read_csv(skyline_file, sep=",")
-        if len(data.columns) == 1:
-            data = pd.read_csv(file, sep=";")
-        data = convert_column_names(data)
-        data["Sample Type"] = data["Sample Type"].apply(convert_sample_types)
-        data["%Diff"] = data["%Diff"].apply(convert_accuracy_to_diff).fillna("N/A")
         data["Calculated Amt"] = data["Calculated Amt"].apply(convert_calculated_amt)
-        data = data.apply(handle_na, axis=1)
-    except KeyError:
-        raise ValueError("There seems to be an error while parsing file. Please make sure your data is comma separated.")
-    except Exception:
-        raise RuntimeError("Unkown error while converting the skyline intput file.")
+    except ValueError:
+        data["Calculated Amt"].replace(to_replace=re.compile(pattern='∞'), value="NaN", inplace=True)
+        data["Calculated Amt"] = data["Calculated Amt"].apply(convert_calculated_amt)
+    data = data.apply(handle_na, axis=1)
+
     return data
 
 if __name__ == "__main__":
@@ -97,5 +108,5 @@ if __name__ == "__main__":
     #converted_df["Calculated Amt"] = converted_df["Calculated Amt"].apply(convert_calculated_amt)
     #converted_df = converted_df.apply(handle_na, axis=1)
     #converted_df.to_excel(r"C:\Users\legregam\Desktop\test\test.xlsx", index=False)
-    data = main(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
+    data = import_skyline_dataset(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
     data.to_excel(r"C:\Users\legregam\Desktop\test\test2.xlsx")
