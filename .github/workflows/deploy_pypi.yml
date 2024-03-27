@@ -3,17 +3,24 @@ name: Publish Python 🐍 distributions 📦 to PyPI and TestPyPI
 on:
   release:
     types: [published]
-
+    tags:
+      - v*
+      -
 jobs:
   build-n-publish:
     name: Build and publish Python 🐍 distributions 📦 to PyPI and TestPyPI
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ms-reader/
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
       - uses: actions/checkout@master
-      - name: Set up Python 3.11
+      - name: Set up Python 3.9
         uses: actions/setup-python@v1
         with:
-          python-version: 3.11
+          python-version: 3.9
       - name: Install pypi/build
         run: >-
           python -m
@@ -27,7 +34,5 @@ jobs:
           --sdist
           --wheel
           --outdir dist/
-      - name: Publish distribution 📦 to PyPI
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
