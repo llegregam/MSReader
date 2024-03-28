@@ -270,10 +270,8 @@ class Extractor:
         Replace initial N/F with 0
         :return: None
         """
-        self.data.loc[:, "Area"] = \
-            self.data.loc[:, "Area"].replace("N/F", 0).copy()
-        self.data.loc[:, "Calculated Amt"] = \
-            self.data.loc[:, "Calculated Amt"].replace("N/F", 0).copy()
+        self.data["Area"] = self.data["Area"].replace("N/F", 0)
+        self.data["Calculated Amt"] = self.data["Calculated Amt"].replace("N/F", 0).copy()
 
     def _split_dataframes(self):
         """
@@ -320,7 +318,7 @@ class Extractor:
         Replace excluded points concentration with 'excluded'
         :return: None
         """
-        self.calib_data.loc[:, "Calculated Amt"] = pd.to_numeric(
+        self.calib_data["Calculated Amt"] = pd.to_numeric(
             self.calib_data["Calculated Amt"]
         )
         self.calib_data.loc[
@@ -580,7 +578,7 @@ class Extractor:
         """
         # normalise
         self._generate_normalised_concentrations(cols)
-        # map "ND" to negative and null values
+        # applymap "ND" to negative and null values
         self.quantities = self.quantities.applymap(format)
         self.normalised_quantities = \
             self.normalised_quantities.applymap(format)
@@ -622,7 +620,7 @@ class Extractor:
 
         # generate loq_table
         self.loq_table = self._define_loq(self.concentration_table.copy())
-        # map "ND" to negative and null values
+        # applymap "ND" to negative and null values
         self.concentration_table = self.concentration_table.applymap(
             format
         )
