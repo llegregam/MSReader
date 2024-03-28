@@ -214,13 +214,13 @@ if data:
         try:
             reader.handle_calibration()
         except Exception as e:
-            st.error("There was an error while handling the calibration data")
+            st.error(f"There was an error while handling the calibration data:\n{e}")
             raise
     if report_box:
         try:
             reader.generate_report(metabolites_to_drop)
         except Exception as e:
-            st.error("There was an error while generating the report")
+            st.error(f"There was an error while generating the report:\n{e}")
             raise
         if preview:
             with st.expander("Show report"):
