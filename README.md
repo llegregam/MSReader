@@ -1,6 +1,6 @@
-# MS_Reader
+<img src="_static/logo.png" alt="image" width="25%" height="auto">
 
-[image](_static/logo.png)
+# MS_Reader
 
 **MS_Reader is a package for parsing and rearranging data originating from ThermoFisher's Tracefinder software or Skyline by Proteoziward for
 Mass Spectrometry data processing**.
