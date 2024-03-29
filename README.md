@@ -1,4 +1,4 @@
-<img src="_static/logo.png" alt="image" width="25%" height="auto">
+<img src="_static/logo.png" alt="image" width="20%" height="auto">
 
 # MS_Reader
 
