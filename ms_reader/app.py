@@ -1,5 +1,6 @@
 from pathlib import Path
 from io import BytesIO
+import re
 
 import streamlit as st
 import pandas as pd
@@ -28,8 +29,28 @@ def check_uptodate():
                 f'"pip install --upgrade ms_reader". \n\n'
                 f'Check the documentation for more information.'
             )
+            changes = get_latest_changes(str(Path(pf_path.parent, 'CHANGELOG.md')))
+            st.info(f"Changes in {lastversion}:{changes}")
+
     except Exception:
         pass
+
+def get_latest_changes(changelog_file):
+    with open(changelog_file, 'r') as file:
+        lines = file.readlines()
+        lines = lines[2:] # skip the first two lines
+
+    latest_version_changes = []
+    for line in lines:
+        # Stop at the second version header
+        if re.match(r"^## \[.*\]", line):
+            if latest_version_changes:  # If we've already started recording changes, stop
+                break
+            else:  # Otherwise, start recording changes
+                continue
+        latest_version_changes.append(line)
+
+    return " ".join(latest_version_changes)
 
 
 def df_format(x):
