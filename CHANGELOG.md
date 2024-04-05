@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0] - 2024-04-05
+
+### Added
+
+- Changes introduced in new versions are now explicitly detailed in the graphical user interface
+
+## [1.6.2] - 2024-03-27
+
+### Added
+
+- Rebuilt test suite to include new features
+- Added testing support for Python 3.11 & 3.12
+
 ## [1.6.0] - 2024-03-20
 
 ### Changed
