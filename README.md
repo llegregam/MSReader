@@ -2,8 +2,8 @@
 
 # MS_Reader
 
-**MS_Reader is a package for parsing and rearranging data originating from ThermoFisher's Tracefinder software or Skyline by Proteoziward for
-Mass Spectrometry data processing**.
+**MS_Reader is a package for parsing and rearranging data originating from ThermoFisher's Tracefinder software or 
+Skyline by Proteoziward for Mass Spectrometry data processing**.
 
 It is one of the routine tools used on the [MetaToul Platform](https://www6.toulouse.inrae.fr/metatoul)
 
