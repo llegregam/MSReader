@@ -25,21 +25,65 @@ SAMPLE_TYPE_MAPPING = {
 
 
 def convert_column_names(df):
+    """
+    This function is used to rename the columns of a DataFrame based on a predefined mapping.
+
+    The mapping is defined in the MAPPING dictionary, where the keys are the original column names
+    and the values are the new column names.
+
+    :param df: The DataFrame whose columns are to be renamed.
+    :return: The DataFrame with renamed columns.
+    """
     return df.rename(MAPPING, axis=1)
 
 
 def convert_sample_types(value):
+    """
+    This function is used to convert the sample types based on a predefined mapping.
+
+    The mapping is defined in the SAMPLE_TYPE_MAPPING dictionary, where the keys are the original sample types
+    and the values are the new sample types.
+
+    :param value: The original sample type.
+
+    :return: The new sample type if it exists in the mapping, otherwise returns the original value.
+    """
+
     if value in SAMPLE_TYPE_MAPPING.keys():
         return SAMPLE_TYPE_MAPPING[value]
     return value
 
 
 def convert_accuracy_to_diff(value):
+    """
+    This function is used to convert the accuracy value to a difference value.
+
+    Parameters:
+    value (str): The original accuracy value as a string with a '%' sign.
+
+    Returns:
+    float: The difference value as a float, rounded to 1 decimal place.
+    """
+
     if value != np.nan:
         return round(float(str(value).replace("%", ""))-100, 1)
 
 
 def convert_calculated_amt(value):
+    """
+    This function is used to convert the calculated amount value based on certain conditions.
+
+    If the value is a string and contains either "Normalized Area" or "NaN", the function returns NaN.
+    If the value is a string and does not contain either "Normalized Area" or "NaN", the function removes " uM"
+    from the string and converts it to a float.
+
+    Parameters:
+    value (str): The original calculated amount value.
+
+    Returns:
+    float or NaN: The converted calculated amount value as a float, or NaN if the original value contained "Normalized Area" or "NaN".
+    """
+
     if type(value) == str:
         if "Normalized Area" in value or "NaN" in value:
             return np.nan
@@ -47,14 +91,30 @@ def convert_calculated_amt(value):
 
 
 def handle_na(row):
+    """
+    This function is used to handle missing values in a given row of a DataFrame.
+
+    The function checks for certain conditions in the row and modifies the values accordingly.
+    If "(heavy)" is in the "Precursor" value, " C13" is appended to the "Compound" value.
+    If the "Area" value is NaN, both the "Area" and "Calculated Amt" values are set to "N/F".
+    If the "Calculated Amt" value is None, it is set to NaN.
+    If both the "Area" and "Calculated Amt" values are not strings and the "Area" value is not NaN but the "Calculated Amt" value is NaN, the "Calculated Amt" value is set to NaN.
+    If a TypeError occurs during the process, the row and the "Area" and "Calculated Amt" values are printed.
+
+    Parameters:
+    row (pandas.Series): The row of the DataFrame to handle missing values in.
+
+    Returns:
+    pandas.Series: The row of the DataFrame with handled missing values.
+    """
+
     if "(heavy)" in row["Precursor"]:
-        row["Compound"] = row["Compound"] + " C13"
+        row["Compound"] += " C13"
     if np.isnan(row["Area"]):
-        row["Area"] = "N/F"
-        row["Calculated Amt"] = "N/F"
+        row["Area"] = row["Calculated Amt"] = "N/F"
     if row["Calculated Amt"] is None:
         row["Calculated Amt"] = np.nan
-    if not type(row["Area"]) == str and not type(row["Calculated Amt"]) == str:
+    if not isinstance(row["Area"], str) and not isinstance(row["Calculated Amt"], str):
         try:
             if not np.isnan(row["Area"]) and np.isnan(row["Calculated Amt"]):
                 row["Calculated Amt"] = np.nan
@@ -97,18 +157,6 @@ def import_skyline_dataset(skyline_file):
 
 if __name__ == "__main__":
 
-    # df = pd.read_csv(,sep=",")
-    # print(df.columns)
-    # converted_df = convert_column_names(df)
-    # print(converted_df.columns)
-    # print(converted_df["Sample Type"].unique())
-    # converted_df["Sample Type"] = converted_df["Sample Type"].apply(convert_sample_types)
-    # print(converted_df["Sample Type"].unique())
-    # print(converted_df["%Diff"])
-    # converted_df["%Diff"] = converted_df["%Diff"].apply(convert_accuracy_to_diff).fillna("NA")
-    # print(converted_df["%Diff"])
-    # converted_df["Calculated Amt"] = converted_df["Calculated Amt"].apply(convert_calculated_amt)
-    # converted_df = converted_df.apply(handle_na, axis=1)
-    # converted_df.to_excel(r"C:\Users\legregam\Desktop\test\test.xlsx", index=False)
+
     data = import_skyline_dataset(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
     data.to_excel(r"C:\Users\legregam\Desktop\test\test2.xlsx")
