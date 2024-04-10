@@ -98,6 +98,10 @@ class Extractor:
 
     @property
     def norm_unit(self):
+        """
+        The norm_unit property method is used to get the normalized unit of measurement for the data. The normalized
+        unit is parsed from the metadata file. If the metadata file is not present, the method raises an AttributeError.
+        """
 
         if self._concunits is not None:
             return self._concunits
@@ -193,7 +197,7 @@ class Extractor:
 
     def generate_metadata(self, nb_norms: int = 1) -> pd.DataFrame:
         """
-        Generate metadata file from input data.
+        Generate metadata file from input data. The metadata file is used to normalize the data.
 
         :return: Dataframe containing metadata
         """
@@ -295,23 +299,23 @@ class Extractor:
             self.data["Sample Type"].str.contains("Matrix Blank")
         ].copy()
 
-    def _split_dataframes_test(self):
-
-        self.calib_data = self.data[
-            self.data["Sample Type"].str.contains("Cal")
-        ].copy()
-        self.sample_data = self.data[
-            ~self.data["Sample Type"].str.contains("Cal|QC")
-        ].copy()
-        self.qc_data = self.data[
-            self.data["Sample Type"].str.contains("QC")
-        ].copy()
-        self.blank_data = self.data[
-            self.data["Sample_Name"].str.contains("Blank")
-        ].copy()
-        self.sample_data = self.sample_data[
-            ~self.sample_data["Sample_Name"].str.contains("Blank")
-        ].copy()
+    # def _split_dataframes_test(self):
+    #
+    #     self.calib_data = self.data[
+    #         self.data["Sample Type"].str.contains("Cal")
+    #     ].copy()
+    #     self.sample_data = self.data[
+    #         ~self.data["Sample Type"].str.contains("Cal|QC")
+    #     ].copy()
+    #     self.qc_data = self.data[
+    #         self.data["Sample Type"].str.contains("QC")
+    #     ].copy()
+    #     self.blank_data = self.data[
+    #         self.data["Sample_Name"].str.contains("Blank")
+    #     ].copy()
+    #     self.sample_data = self.sample_data[
+    #         ~self.sample_data["Sample_Name"].str.contains("Blank")
+    #     ].copy()
 
     def _get_excluded(self):
         """
@@ -330,7 +334,7 @@ class Extractor:
 
     def _generate_minmax_calib(self):
         """
-        Generate calibration dataframe with minimum and maximum value columns
+        Generate calibration dataframe with minimum and maximum value columns.
         :return: None
         """
 
@@ -502,7 +506,10 @@ class Extractor:
 
     def normalise(self, df, multiply=True, divide=True) -> pd.DataFrame:
         """
-        Normalise concentrations by multiplying by volume and dividing by norms
+        Two normalisations are applied: the first is linked to the resuspension volume, where we multiply by the default
+        volume unit which is in microliters. The second and following normalisations are linked to the normalisation
+        factors that the user wants to apply to the data. The data will be divided by these factors. The final unit
+        will thus be derived from these successive operations.
 
         :param df: dataframe to normalise
         :param multiply: should the multiplications be applied
