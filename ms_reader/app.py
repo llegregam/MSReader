@@ -13,10 +13,12 @@ from ms_reader.skyline_convert import import_skyline_dataset
 EXCEL_ENGINE = "openpyxl"
 MIME = "application/vnd.openxmlformats-" \
        "officedocument.spreadsheetml.sheet"
+CONCENTRATION_UNIT = "µM"
+QUANTITY_UNIT = "µmol"
 
 
 def check_uptodate():
-    """Compare installed and most recent package versions."""
+    """Compare installed and most recent package versions & fetch changelog."""
     try:
         pf_path = Path(__file__).parent
         with open(str(Path(pf_path, "last_version.txt")), "r") as f:
@@ -36,6 +38,16 @@ def check_uptodate():
         pass
 
 def get_latest_changes(changelog_file):
+    """
+    Extracts the changes of the latest version from a CHANGELOG.md file.
+
+    Args:
+        changelog_file (str): The file path to the CHANGELOG.md file.
+
+    Returns:
+        str: A string containing the changes made in the latest version.
+    """
+
     with open(changelog_file, 'r') as file:
         lines = file.readlines()
         lines = lines[2:] # skip the first two lines
@@ -99,11 +111,7 @@ with col3:
 
 if data:
 
-    if skyline:
-        data = import_skyline_dataset(data)
-    else:
-        # noinspection PyArgumentList
-        data = pd.read_excel(io=data, engine=EXCEL_ENGINE)
+    data = import_skyline_dataset(data) if skyline else pd.read_excel(io=data, engine=EXCEL_ENGINE)
 
     # Add way to drop metabolites from data
     with st.expander("Click to open metabolite remover"):
@@ -222,7 +230,7 @@ if data:
             label="Input the concentration unit"
             if reader.metadata is None
             else "Input the quantity unit",
-            value="µM" if reader.metadata is None else "µmol"
+            value = CONCENTRATION_UNIT if reader.metadata is None else QUANTITY_UNIT
         )
 
         destination = st.text_input("Input destination path for excel files")
