@@ -18,7 +18,7 @@ QUANTITY_UNIT = "µmol"
 
 
 def check_uptodate():
-    """Compare installed and most recent package versions."""
+    """Compare installed and most recent package versions & fetch changelog."""
     try:
         pf_path = Path(__file__).parent
         with open(str(Path(pf_path, "last_version.txt")), "r") as f:
@@ -111,11 +111,7 @@ with col3:
 
 if data:
 
-    if skyline:
-        data = import_skyline_dataset(data)
-    else:
-        # noinspection PyArgumentList
-        data = pd.read_excel(io=data, engine=EXCEL_ENGINE) # When TraceFinder is the source of the data
+    data = import_skyline_dataset(data) if skyline else pd.read_excel(io=data, engine=EXCEL_ENGINE)
 
     # Add way to drop metabolites from data
     with st.expander("Click to open metabolite remover"):
