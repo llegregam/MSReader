@@ -84,7 +84,7 @@ def convert_calculated_amt(value):
     float or NaN: The converted calculated amount value as a float, or NaN if the original value contained "Normalized Area" or "NaN".
     """
 
-    if type(value) == str:
+    if isinstance(value, str):
         if "Normalized Area" in value or "NaN" in value:
             return np.nan
         return float(str(value).replace(" uM", ""))
