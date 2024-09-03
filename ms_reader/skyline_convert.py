@@ -14,7 +14,8 @@ MAPPING = {
     "Quantification": "Calculated Amt",
     "Explicit Analyte Concentration": "Theoretical Amt",
     "Exclude From Calibration": "Excluded",
-    "Accuracy": "%Diff"
+    "Accuracy": "%Diff",
+    "Normalized Area": "Response Ratio"
 }
 
 SAMPLE_TYPE_MAPPING = {
@@ -155,8 +156,9 @@ def import_skyline_dataset(skyline_file):
     return data
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-
-    data = import_skyline_dataset(r"C:\Users\legregam\PycharmProjects\MSReader\tests\data\skyline\Quantif-MC.csv")
-    data.to_excel(r"C:\Users\legregam\Desktop\test\test2.xlsx")
+#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
+#         data = import_skyline_dataset(file)
+#         print(data["Response Ratio"])
+#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
