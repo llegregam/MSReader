@@ -747,50 +747,52 @@ class Extractor:
         # "Response Ratio: contains a ratio between c12 and c13 (takes c13 signal subrogation into account) for each compound and sample
         if not c12["Response Ratio"].equals(c13["Response Ratio"]):
             differences = c12["Response Ratio"].compare(c13["Response Ratio"], result_names=("C12", "C13"))
+            c12.drop(differences.index, inplace=True)
+            c13.drop(differences.index, inplace=True)
             self.logger.error(f"Response ratios are not the same for the same index levels {differences}")
-        else:
-            self.ratios = c12["Response Ratio"]
-            self.ratios.name = "Ratios"
-            
-            self.ratios = self.ratios.reset_index(level="Sample_Name")
-            # Values in the ratios column are in scientific notation, convert them to numeric
-            self.ratios["Ratios"] = pd.to_numeric(self.ratios["Ratios"], errors="coerce")
-            self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound",
-                                        "Sample_Name")
-            
-            # Add a unit column to the ratios table
-            base_unit = "12C/13C"
-            new_cols = natsorted(self.ratios.columns)
-            new_cols.insert(0, "unit")
-            
-            if self.metadata is not None:
-                self.normalised_ratios = self.normalise(
-                    self.ratios.copy(),
-                    multiply=False
-                )
-                self.normalised_ratios = self.normalised_ratios.map(format)
-                self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
-                self.normalised_ratios = self.normalised_ratios[new_cols]
-                self.normalised_ratios = self._replace(
-                    self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
-                )
+        
+        self.ratios = c12["Response Ratio"]
+        self.ratios.name = "Ratios"
+        
+        self.ratios = self.ratios.reset_index(level="Sample_Name")
+        # Values in the ratios column are in scientific notation, convert them to numeric
+        self.ratios["Ratios"] = pd.to_numeric(self.ratios["Ratios"], errors="coerce")
+        self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound",
+                                    "Sample_Name")
+        
+        # Add a unit column to the ratios table
+        base_unit = "12C/13C"
+        new_cols = natsorted(self.ratios.columns)
+        new_cols.insert(0, "unit")
+        
+        if self.metadata is not None:
+            self.normalised_ratios = self.normalise(
+                self.ratios.copy(),
+                multiply=False
+            )
+            self.normalised_ratios = self.normalised_ratios.map(format)
+            self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
+            self.normalised_ratios = self.normalised_ratios[new_cols]
+            self.normalised_ratios = self._replace(
+                self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
+            )
 
-            
-            self.ratios = self.ratios.map(format)
-            self.ratios["unit"] = base_unit
-            self.ratios = self.ratios[new_cols]
-            self.ratios = self._replace(
-                self.ratios, [np.inf, np.nan], "NA", "dataframe"
-            )
-            
+        
+        self.ratios = self.ratios.map(format)
+        self.ratios["unit"] = base_unit
+        self.ratios = self.ratios[new_cols]
+        self.ratios = self._replace(
+            self.ratios, [np.inf, np.nan], "NA", "dataframe"
+        )
+        
+        self.excel_tables.append(
+            ("Ratios", self.ratios)
+        )
+        
+        if self.metadata is not None:
             self.excel_tables.append(
-                ("Ratios", self.ratios)
+                ("Normalised_Ratios", self.normalised_ratios)
             )
-            
-            if self.metadata is not None:
-                self.excel_tables.append(
-                    ("Normalised_Ratios", self.normalised_ratios)
-                )
         
     # def generate_ratios(self):
 
@@ -1251,11 +1253,11 @@ class QCError(Error):
     def __init__(self, message):
         self.message = message
 
-# if __name__ == "__main__":
-#     from ms_reader.skyline_convert import import_skyline_dataset
-#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
-#         data = import_skyline_dataset(file)
-#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
+if __name__ == "__main__":
+    from ms_reader.skyline_convert import import_skyline_dataset
+    with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
+        data = import_skyline_dataset(file)
+        # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
 
-#         extract = Extractor(data)
-#         extract.generate_ratios()
+        extract = Extractor(data)
+        extract.generate_ratios()
