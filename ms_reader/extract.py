@@ -704,10 +704,12 @@ class Extractor:
 
     def generate_ratios(self):
         """
-        Generate ratios between c12 and c13. Check if all metabolites are present in both datasets and
-        if not, log the missing ones. Check if the response ratios are the same for the same index levels
-        and log the differences. Then compute the ratios and format the tables for export.
-        :return: None
+        Generate ratios between c12 and c13. 
+        - Check if all metabolites are present in both datasets 
+        - Checks whether c12 and c13 have the same values in the "Response Ratio" column 
+            (ratio c12/c13 taking into account the subrogation of the c13 signal).
+        - Then compute the ratios and format the tables for export.
+        
         """
 
         # Isolate c12 and c13 data
@@ -1253,9 +1255,7 @@ class QCError(Error):
 #     from ms_reader.skyline_convert import import_skyline_dataset
 #     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
 #         data = import_skyline_dataset(file)
-#         print(data["Response Ratio"])
-#     #     # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
+#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
 
-#     #     extract = Extractor(data)
-#         # print(extract.data)
-# #         extract.generate_ratios2()
+#         extract = Extractor(data)
+#         extract.generate_ratios()
