@@ -726,7 +726,6 @@ class Extractor:
                 f"Metabolites missing from IDMS: \n{missing_c13_std}")
         else:
             self.logger.info("All metabolites are present in the IDMS")
-
         
         c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
         # Set indexes and sort them for both c12 and c13 dataframes to ensure they are the same
@@ -737,20 +736,8 @@ class Extractor:
         # Drop missing compounds from c12 df
         if missing_c13_std:
             c12.drop(missing_c13_std, inplace=True)
-        # to_log = pd.pivot_table(
-        #     c13[c13['Area'] == 0], 'Area', 'Compound', 'Sample_Name'
-        # )
-        # self.logger.warning(
-        #     f"\nMetabolites with null areas in c13 data:\n"
-        #     f"{to_log}\n")
         
         # "Response Ratio: contains a ratio between c12 and c13 (takes c13 signal subrogation into account) for each compound and sample
-        if not c12["Response Ratio"].equals(c13["Response Ratio"]):
-            differences = c12["Response Ratio"].compare(c13["Response Ratio"], result_names=("C12", "C13"))
-            c12.drop(differences.index, inplace=True)
-            c13.drop(differences.index, inplace=True)
-            self.logger.error(f"Response ratios are not the same for the same index levels {differences}")
-        
         self.ratios = c12["Response Ratio"]
         self.ratios.name = "Ratios"
         
@@ -1253,11 +1240,12 @@ class QCError(Error):
     def __init__(self, message):
         self.message = message
 
-if __name__ == "__main__":
-    from ms_reader.skyline_convert import import_skyline_dataset
-    with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
-        data = import_skyline_dataset(file)
-        # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
+# if __name__ == "__main__":
+#     from ms_reader.skyline_convert import import_skyline_dataset
+#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
+#         data = import_skyline_dataset(file)
+#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
 
-        extract = Extractor(data)
-        extract.generate_ratios()
+#         extract = Extractor(data)
+#         extract.generate_ratios()
+        
