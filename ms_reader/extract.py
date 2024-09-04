@@ -270,7 +270,8 @@ class Extractor:
         Replace initial N/F with 0
         :return: None
         """
-        # pd.set_option('future.no_silent_downcasting', True)
+        # Set the option to raise an error when downcasting
+        pd.set_option('future.no_silent_downcasting', True)
 
         self.data["Area"] = self.data["Area"].replace("N/F", 0).infer_objects(copy=False)
         self.data["Calculated Amt"] = self.data["Calculated Amt"].replace("N/F", 0).copy()
@@ -323,6 +324,8 @@ class Extractor:
         self.calib_data["Calculated Amt"] = pd.to_numeric(
             self.calib_data["Calculated Amt"]
         )
+        
+        self.calib_data["Calculated Amt"] = self.calib_data["Calculated Amt"].astype(object)
         self.calib_data.loc[
             self.calib_data["Excluded"] == "True", "Calculated Amt"
         ] = "Excluded"
