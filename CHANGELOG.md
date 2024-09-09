@@ -1,10 +1,20 @@
 # Changelog
 
-## [1.7.0] - 2024-04-05
+## [1.7.0] - 2024-09-09
 
 ### Added
 
 - Changes introduced in new versions are now explicitly detailed in the graphical user interface
+
+### Changed
+
+- Ratios are not calculated any more, just parsed from data
+
+### Fixed
+
+- Fixed bug on launch where the program wouldn't start because of multiple 
+  calls to set_config
+- Removed deprecated pandas functions
 
 ## [1.6.2] - 2024-03-27
 
