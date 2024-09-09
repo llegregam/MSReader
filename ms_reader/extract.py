@@ -63,7 +63,7 @@ class Extractor:
 
         self.data.drop("Filename", axis=1, inplace=True)
         columns = [
-            "Compound", "Sample_Name", "Area", "Sample Type",
+            "Compound", "Sample_Name", "Area", "Response Ratio", "Sample Type",
             "Calculated Amt", "Theoretical Amt",
             "Excluded", "%Diff"
         ]
@@ -274,7 +274,10 @@ class Extractor:
         Replace initial N/F with 0
         :return: None
         """
-        self.data["Area"] = self.data["Area"].replace("N/F", 0)
+        # Set the option to raise an error when downcasting
+        pd.set_option('future.no_silent_downcasting', True)
+
+        self.data["Area"] = self.data["Area"].replace("N/F", 0).infer_objects(copy=False)
         self.data["Calculated Amt"] = self.data["Calculated Amt"].replace("N/F", 0).copy()
 
     def _split_dataframes(self):
@@ -325,6 +328,8 @@ class Extractor:
         self.calib_data["Calculated Amt"] = pd.to_numeric(
             self.calib_data["Calculated Amt"]
         )
+        
+        self.calib_data["Calculated Amt"] = self.calib_data["Calculated Amt"].astype(object)
         self.calib_data.loc[
             self.calib_data["Excluded"] == "True", "Calculated Amt"
         ] = "Excluded"
@@ -708,12 +713,21 @@ class Extractor:
                 )
 
     def generate_ratios(self):
+        """
+        Generate ratios between c12 and c13. 
+        - Check if all metabolites are present in both datasets 
+        - Checks whether c12 and c13 have the same values in the "Response Ratio" column 
+            (ratio c12/c13 taking into account the subrogation of the c13 signal).
+        - Then compute the ratios and format the tables for export.
+        
+        """
 
-        # Isolate missing c13 compounds
+        # Isolate c12 and c13 data
         c12 = self.sample_data[
             ~self.sample_data["Compound"].str.contains("C13")].copy()
         c13 = self.sample_data[
-            self.sample_data["Compound"].str.contains("C13")].copy()
+            self.sample_data["Compound"].str.contains("C13")].copy() 
+        # Use the _check_if_std method to check for missing c13 compounds   
         c12_compounds, missing_c13_std = self._check_if_std(
             list(c12["Compound"].unique()), list(c13["Compound"].unique())
         )
@@ -722,102 +736,175 @@ class Extractor:
                 f"Metabolites missing from IDMS: \n{missing_c13_std}")
         else:
             self.logger.info("All metabolites are present in the IDMS")
-
-        # Drop missing compounds from c12 df
+        
         c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
+        # Set indexes and sort them for both c12 and c13 dataframes to ensure they are the same
         c12.set_index(["Compound", "Sample_Name"], inplace=True)
         c13.set_index(["Compound", "Sample_Name"], inplace=True)
         c12.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
         c13.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
+        # Drop missing compounds from c12 df
         if missing_c13_std:
             c12.drop(missing_c13_std, inplace=True)
-        to_log = pd.pivot_table(
-            c13[c13['Area'] == 0], 'Area', 'Compound', 'Sample_Name'
-        )
-        self.logger.warning(
-            f"\nMetabolites with null areas in c13 data:\n"
-            f"{to_log}\n")
-
-        # Ensure that c12 and C13 have same indexes. Check both ways and
-        # isolate missing indexes. Compute ratios
-        if c12.index.difference(c13.index).levshape != (
-                0, 0) and c13.index.difference(c12.index).levshape != (0, 0):
-            c12_diff = c12.index.difference(c13.index)
-            c13_diff = c13.index.difference(c12.index)
-            intercept = c12.index.intersection(c13.index)
-            self.ratios = c12.loc[intercept, "Area"].divide(
-                c13.loc[intercept, "Area"])
-            self.ratios.name = "Ratios"
-            self.no_ratio = {
-                "c12": c12.loc[c12_diff, :],
-                "c13": c13.loc[c13_diff, :]
-            }
-            self.logger.debug(
-                f"Some index levels are in C12 data and not in C13 data. "
-                f"Differences:\n{self.no_ratio['c12']} "
-                f"\n Some index levels are in C13 data and not in C12 data. "
-                f"Differences: \n{self.no_ratio['c13']}")
-        else:
-            if c12.index.difference(c13.index).levshape != (0, 0):
-                c12_c13_diff = c12.index.difference(c13.index)
-                self.ratios = c12.drop(c12_c13_diff).loc[
-                    c12_c13_diff, "Area"].divide(c13.loc[:, "Area"])
-                self.ratios.name = "Ratios"
-                self.no_ratio = c12.loc[c12_c13_diff, :]
-                self.logger.info(
-                    f"Some index levels are in C12 data and not in C13 data. "
-                    f"Differences:\n{c12_c13_diff}"
-                )
-                print(f"Ratios calculated:\n{self.ratios}")
-            elif c13.index.difference(c12.index).levshape != (0, 0):
-                c13_c12_diff = c13.index.difference(c12.index)
-                self.ratios = c12.loc[:, "Area"].divide(
-                    c13.drop(c13_c12_diff).loc[:, "Area"])
-                self.ratios.name = "Ratios"
-                self.no_ratio = c13.loc[c13_c12_diff, :]
-                self.logger.info(
-                    f"Some index levels are in C13 data and not in C12 data. "
-                    f"Differences:\n{c13_c12_diff}"
-                )
-                print(f"Ratios calculated:\n{self.ratios}")
-            else:
-                self.ratios = c12.loc[:, "Area"].divide(c13.loc[:, "Area"])
-                self.ratios.name = "Ratios"
-                print(
-                    f"Ratios calculated with no differences detected between "
-                    f"c12 and c13 indexes. Ratios:\n{self.ratios}"
-                )
+        
+        # "Response Ratio: contains a ratio between c12 and c13 (takes c13 signal subrogation into account) for each compound and sample
+        self.ratios = c12["Response Ratio"]
+        self.ratios.name = "Ratios"
+        
         self.ratios = self.ratios.reset_index(level="Sample_Name")
+        # Values in the ratios column are in scientific notation, convert them to numeric
+        self.ratios["Ratios"] = pd.to_numeric(self.ratios["Ratios"], errors="coerce")
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound",
-                                     "Sample_Name")
+                                    "Sample_Name")
+        
+        # Add a unit column to the ratios table
         base_unit = "12C/13C"
         new_cols = natsorted(self.ratios.columns)
         new_cols.insert(0, "unit")
+        
         if self.metadata is not None:
             self.normalised_ratios = self.normalise(
                 self.ratios.copy(),
                 multiply=False
             )
-            self.normalised_ratios = self.normalised_ratios.applymap(format)
+            self.normalised_ratios = self.normalised_ratios.map(format)
             self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
             self.normalised_ratios = self.normalised_ratios[new_cols]
             self.normalised_ratios = self._replace(
                 self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
             )
-        self.ratios = self.ratios.applymap(format)
+
+        
+        self.ratios = self.ratios.map(format)
         self.ratios["unit"] = base_unit
         self.ratios = self.ratios[new_cols]
         self.ratios = self._replace(
             self.ratios, [np.inf, np.nan], "NA", "dataframe"
         )
+        
         self.excel_tables.append(
             ("Ratios", self.ratios)
         )
+        
         if self.metadata is not None:
             self.excel_tables.append(
                 ("Normalised_Ratios", self.normalised_ratios)
             )
+        
+    # def generate_ratios(self):
 
+    #     # Isolate missing c13 compounds
+    #     c12 = self.sample_data[
+    #         ~self.sample_data["Compound"].str.contains("C13")].copy()
+    #     c13 = self.sample_data[
+    #         self.sample_data["Compound"].str.contains("C13")].copy()
+    #     c12_compounds, missing_c13_std = self._check_if_std(
+    #         list(c12["Compound"].unique()), list(c13["Compound"].unique())
+    #     )
+    #     if missing_c13_std:
+    #         self.logger.info(
+    #             f"Metabolites missing from IDMS: \n{missing_c13_std}")
+    #     else:
+    #         self.logger.info("All metabolites are present in the IDMS")
+       
+    #     # Drop missing compounds from c12 df
+    #     c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
+    #     c12.set_index(["Compound", "Sample_Name"], inplace=True)
+    #     c13.set_index(["Compound", "Sample_Name"], inplace=True)
+    #     c12.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
+    #     c13.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
+    #     if missing_c13_std:
+    #         c12.drop(missing_c13_std, inplace=True)
+    #     to_log = pd.pivot_table(
+    #         c13[c13['Area'] == 0], 'Area', 'Compound', 'Sample_Name'
+    #     )
+    #     self.logger.warning(
+    #         f"\nMetabolites with null areas in c13 data:\n"
+    #         f"{to_log}\n")
+
+    #     # Ensure that c12 and C13 have same indexes. Check both ways and
+    #     # isolate missing indexes. Compute ratios
+    #     if c12.index.difference(c13.index).levshape != (
+    #             0, 0) and c13.index.difference(c12.index).levshape != (0, 0):
+    #         c12_diff = c12.index.difference(c13.index)
+    #         c13_diff = c13.index.difference(c12.index)
+    #         intercept = c12.index.intersection(c13.index)
+    #         self.ratios = c12.loc[intercept, "Area"].divide(
+    #             c13.loc[intercept, "Area"])
+    #         self.ratios.name = "Ratios"
+    #         self.no_ratio = {
+    #             "c12": c12.loc[c12_diff, :],
+    #             "c13": c13.loc[c13_diff, :]
+    #         }
+            
+    #         self.logger.debug(
+    #             f"Some index levels are in C12 data and not in C13 data. "
+    #             f"Differences:\n{self.no_ratio['c12']} "
+    #             f"\n Some index levels are in C13 data and not in C12 data. "
+    #             f"Differences: \n{self.no_ratio['c13']}")
+            
+    #     else:
+    #         if c12.index.difference(c13.index).levshape != (0, 0):
+    #             c12_c13_diff = c12.index.difference(c13.index)
+    #             self.ratios = c12.drop(c12_c13_diff).loc[
+    #                 c12_c13_diff, "Area"].divide(c13.loc[:, "Area"])
+    #             self.ratios.name = "Ratios"
+    #             self.no_ratio = c12.loc[c12_c13_diff, :]
+    #             self.logger.info(
+    #                 f"Some index levels are in C12 data and not in C13 data. "
+    #                 f"Differences:\n{c12_c13_diff}"
+    #             )
+    #             print(f"Ratios calculated:\n{self.ratios}")
+    #         elif c13.index.difference(c12.index).levshape != (0, 0):
+    #             c13_c12_diff = c13.index.difference(c12.index)
+    #             self.ratios = c12.loc[:, "Area"].divide(
+    #                 c13.drop(c13_c12_diff).loc[:, "Area"])
+    #             self.ratios.name = "Ratios"
+    #             self.no_ratio = c13.loc[c13_c12_diff, :]
+    #             self.logger.info(
+    #                 f"Some index levels are in C13 data and not in C12 data. "
+    #                 f"Differences:\n{c13_c12_diff}"
+    #             )
+    #             print(f"Ratios calculated:\n{self.ratios}")
+    #         else:
+    #             self.ratios = c12.loc[:, "Area"].divide(c13.loc[:, "Area"])
+    #             self.ratios.name = "Ratios"
+    #             print(
+    #                 f"Ratios calculated with no differences detected between "
+    #                 f"c12 and c13 indexes. Ratios:\n{self.ratios}"
+    #             )
+    #     self.ratios = self.ratios.reset_index(level="Sample_Name")
+    #     self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound",
+    #                                  "Sample_Name")
+        
+    #     base_unit = "12C/13C"
+    #     new_cols = natsorted(self.ratios.columns)
+    #     new_cols.insert(0, "unit")
+    #     if self.metadata is not None:
+    #         self.normalised_ratios = self.normalise(
+    #             self.ratios.copy(),
+    #             multiply=False
+    #         )
+    #         self.normalised_ratios = self.normalised_ratios.applymap(format)
+    #         self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
+    #         self.normalised_ratios = self.normalised_ratios[new_cols]
+    #         self.normalised_ratios = self._replace(
+    #             self.normalised_ratios, [np.inf, np.nan], "NA", "dataframe"
+    #         )
+    #     self.ratios = self.ratios.map(format)
+    #     self.ratios["unit"] = base_unit
+    #     self.ratios = self.ratios[new_cols]
+    #     self.ratios = self._replace(
+    #         self.ratios, [np.inf, np.nan], "NA", "dataframe"
+    #     )
+    #     self.excel_tables.append(
+    #         ("Ratios", self.ratios)
+    #     )
+    #     if self.metadata is not None:
+    #         self.excel_tables.append(
+    #             ("Normalised_Ratios", self.normalised_ratios)
+    #         )
+    
     @staticmethod
     def _check_if_std(c12_compounds, c13_compounds):
         """
@@ -1162,3 +1249,13 @@ class QCError(Error):
 
     def __init__(self, message):
         self.message = message
+
+# if __name__ == "__main__":
+#     from ms_reader.skyline_convert import import_skyline_dataset
+#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
+#         data = import_skyline_dataset(file)
+#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
+
+#         extract = Extractor(data)
+#         extract.generate_ratios()
+        
