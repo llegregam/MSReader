@@ -63,7 +63,7 @@ def df_format(x):
     return x.astype(str)
 
 
-@st.cache
+@st.cache_data
 def convert_df(df):
     """
     Convert dataframe to excel file stored in RAM and return it
@@ -76,6 +76,7 @@ def convert_df(df):
     df.to_excel(buffer)
     return buffer.getvalue()
 
+# BEGINNING OF APP
 
 st.set_page_config(page_title=f"MS_Reader (v{__version__})")
 st.title(f"Welcome to MS_Reader (v{__version__})")
