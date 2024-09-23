@@ -487,12 +487,12 @@ class Extractor:
             self.norm_c12_areas = self.normalise(
                 self.c12_areas.copy(), False
             )
-            self.norm_c12_areas = self.norm_c12_areas.applymap(format)
+            self.norm_c12_areas = self.norm_c12_areas.map(format)
             self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
 
-        self.c12_areas = self.c12_areas.applymap(format)
-        self.c13_areas = self.c13_areas.applymap(format)
+        self.c12_areas = self.c12_areas.map(format)
+        self.c13_areas = self.c13_areas.map(format)
         self.c12_areas["unit"] = base_unit
         self.c13_areas["unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
@@ -590,10 +590,10 @@ class Extractor:
         """
         # normalise
         self._generate_normalised_concentrations(cols)
-        # applymap "ND" to negative and null values
-        self.quantities = self.quantities.applymap(format)
+        # map "ND" to negative and null values
+        self.quantities = self.quantities.map(format)
         self.normalised_quantities = \
-            self.normalised_quantities.applymap(format)
+            self.normalised_quantities.map(format)
         self.loq_table = self.loq_table.mask(
             self.normalised_quantities == "ND", "ND"
         )
@@ -632,8 +632,8 @@ class Extractor:
 
         # generate loq_table
         self.loq_table = self._define_loq(self.concentration_table.copy())
-        # applymap "ND" to negative and null values
-        self.concentration_table = self.concentration_table.applymap(
+        # map "ND" to negative and null values
+        self.concentration_table = self.concentration_table.map(
             format
         )
         self.loq_table = self.loq_table.mask(
@@ -885,7 +885,7 @@ class Extractor:
     #             self.ratios.copy(),
     #             multiply=False
     #         )
-    #         self.normalised_ratios = self.normalised_ratios.applymap(format)
+    #         self.normalised_ratios = self.normalised_ratios.map(format)
     #         self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
     #         self.normalised_ratios = self.normalised_ratios[new_cols]
     #         self.normalised_ratios = self._replace(
