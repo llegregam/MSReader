@@ -733,12 +733,9 @@ class Extractor:
 
     def generate_ratios(self):
         """
-        Generate ratios between c12 and c13. 
-        - Check if all metabolites are present in both datasets 
-        - Checks whether c12 and c13 have the same values in the "Response Ratio" column 
-            (ratio c12/c13 taking into account the subrogation of the c13 signal).
-        - Then compute the ratios and format the tables for export.
-        
+        Generates C12/C13 ratios using the "Response Ratio" 
+        column (contains the c12/c13 ratio taking into account 
+        the subrogation of the c13 signal). 
         """
 
         # Isolate c12 and c13 data
