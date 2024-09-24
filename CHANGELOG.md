@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1] - 2024-09-24
+
+### Fixed
+
+- Fixed bug where infinite and empty cells were present in "Table.xlsx" files. They are now replace with "NA".  
+
+
 ## [1.7.0] - 2024-09-09
 
 ### Added
