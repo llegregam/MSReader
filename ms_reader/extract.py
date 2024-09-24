@@ -490,14 +490,21 @@ class Extractor:
             self.norm_c12_areas = self.norm_c12_areas.map(format)
             self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
-
+            self.norm_c12_areas = self._replace(
+                self.norm_c12_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
         self.c12_areas = self.c12_areas.map(format)
         self.c13_areas = self.c13_areas.map(format)
         self.c12_areas["unit"] = base_unit
         self.c13_areas["unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
+        self.c12_areas = self._replace(
+                self.c12_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
         self.c13_areas = self.c13_areas[c13_cols]
-
+        self.c13_areas = self._replace(
+                self.c13_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
@@ -599,12 +606,21 @@ class Extractor:
         )
         # add unit column
         self.quantities["unit"] = base_unit
+        
         self.normalised_quantities["unit"] = \
             f"{base_unit}/{self.norm_unit}"
         self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
         cols.insert(0, "unit")
         self.quantities = self.quantities[cols]
+        self.quantities = self._replace(
+                self.quantities, [np.inf, np.nan], "NA", "dataframe"
+            )
+
         self.normalised_quantities = self.normalised_quantities[cols]
+        self.normalised_quantities = self._replace(
+                self.normalised_quantities, [np.inf, np.nan], "NA", "dataframe"
+            )
+
         self.quantities = pd.merge(
             left=self.quantities,
             right=self.min_max,
@@ -620,6 +636,9 @@ class Extractor:
             right_index=True
         )
         self.loq_table = self.loq_table[cols]
+        self.loq_table = self._replace(
+                self.loq_table, [np.inf, np.nan], "NA", "dataframe"
+            )
 
     def _handle_conc_no_norm(self, cols, base_unit):
         """
@@ -1250,12 +1269,4 @@ class QCError(Error):
     def __init__(self, message):
         self.message = message
 
-# if __name__ == "__main__":
-#     from ms_reader.skyline_convert import import_skyline_dataset
-#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
-#         data = import_skyline_dataset(file)
-#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
 
-#         extract = Extractor(data)
-#         extract.generate_ratios()
-        
