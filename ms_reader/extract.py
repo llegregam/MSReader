@@ -487,17 +487,24 @@ class Extractor:
             self.norm_c12_areas = self.normalise(
                 self.c12_areas.copy(), False
             )
-            self.norm_c12_areas = self.norm_c12_areas.applymap(format)
+            self.norm_c12_areas = self.norm_c12_areas.map(format)
             self.norm_c12_areas["unit"] = f"{base_unit}/{self.norm_unit}"
             self.norm_c12_areas = self.norm_c12_areas[c12_cols]
-
-        self.c12_areas = self.c12_areas.applymap(format)
-        self.c13_areas = self.c13_areas.applymap(format)
+            self.norm_c12_areas = self._replace(
+                self.norm_c12_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
+        self.c12_areas = self.c12_areas.map(format)
+        self.c13_areas = self.c13_areas.map(format)
         self.c12_areas["unit"] = base_unit
         self.c13_areas["unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
+        self.c12_areas = self._replace(
+                self.c12_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
         self.c13_areas = self.c13_areas[c13_cols]
-
+        self.c13_areas = self._replace(
+                self.c13_areas, [np.inf, np.nan], "NA", "dataframe"
+            )
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
         )
@@ -590,21 +597,30 @@ class Extractor:
         """
         # normalise
         self._generate_normalised_concentrations(cols)
-        # applymap "ND" to negative and null values
-        self.quantities = self.quantities.applymap(format)
+        # map "ND" to negative and null values
+        self.quantities = self.quantities.map(format)
         self.normalised_quantities = \
-            self.normalised_quantities.applymap(format)
+            self.normalised_quantities.map(format)
         self.loq_table = self.loq_table.mask(
             self.normalised_quantities == "ND", "ND"
         )
         # add unit column
         self.quantities["unit"] = base_unit
+        
         self.normalised_quantities["unit"] = \
             f"{base_unit}/{self.norm_unit}"
         self.loq_table["unit"] = f"{base_unit}/{self.norm_unit}"
         cols.insert(0, "unit")
         self.quantities = self.quantities[cols]
+        self.quantities = self._replace(
+                self.quantities, [np.inf, np.nan], "NA", "dataframe"
+            )
+
         self.normalised_quantities = self.normalised_quantities[cols]
+        self.normalised_quantities = self._replace(
+                self.normalised_quantities, [np.inf, np.nan], "NA", "dataframe"
+            )
+
         self.quantities = pd.merge(
             left=self.quantities,
             right=self.min_max,
@@ -620,6 +636,9 @@ class Extractor:
             right_index=True
         )
         self.loq_table = self.loq_table[cols]
+        self.loq_table = self._replace(
+                self.loq_table, [np.inf, np.nan], "NA", "dataframe"
+            )
 
     def _handle_conc_no_norm(self, cols, base_unit):
         """
@@ -632,8 +651,8 @@ class Extractor:
 
         # generate loq_table
         self.loq_table = self._define_loq(self.concentration_table.copy())
-        # applymap "ND" to negative and null values
-        self.concentration_table = self.concentration_table.applymap(
+        # map "ND" to negative and null values
+        self.concentration_table = self.concentration_table.map(
             format
         )
         self.loq_table = self.loq_table.mask(
@@ -714,12 +733,9 @@ class Extractor:
 
     def generate_ratios(self):
         """
-        Generate ratios between c12 and c13. 
-        - Check if all metabolites are present in both datasets 
-        - Checks whether c12 and c13 have the same values in the "Response Ratio" column 
-            (ratio c12/c13 taking into account the subrogation of the c13 signal).
-        - Then compute the ratios and format the tables for export.
-        
+        Generates C12/C13 ratios using the "Response Ratio" 
+        column (contains the c12/c13 ratio taking into account 
+        the subrogation of the c13 signal). 
         """
 
         # Isolate c12 and c13 data
@@ -885,7 +901,7 @@ class Extractor:
     #             self.ratios.copy(),
     #             multiply=False
     #         )
-    #         self.normalised_ratios = self.normalised_ratios.applymap(format)
+    #         self.normalised_ratios = self.normalised_ratios.map(format)
     #         self.normalised_ratios["unit"] = f"{base_unit}/{self.norm_unit}"
     #         self.normalised_ratios = self.normalised_ratios[new_cols]
     #         self.normalised_ratios = self._replace(
@@ -1250,12 +1266,4 @@ class QCError(Error):
     def __init__(self, message):
         self.message = message
 
-# if __name__ == "__main__":
-#     from ms_reader.skyline_convert import import_skyline_dataset
-#     with open(r"C:\Users\kouakou\Documents\MSREADER\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
-#         data = import_skyline_dataset(file)
-#         # data.to_excel(r"C:\Users\kouakou\Documents\MSREADER\data\test2.xlsx")
 
-#         extract = Extractor(data)
-#         extract.generate_ratios()
-        
