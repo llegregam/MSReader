@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.2] - 2024-12-04
+
+### Fixed
+
+- Fixed feature filtering problem in output files, now all features are present.
+- Removed the 'LLOQ' and 'ULOQ' columns from specific tables in the output files.
+
+
 ## [1.7.1] - 2024-09-24
 
 ### Fixed
