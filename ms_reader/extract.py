@@ -96,6 +96,11 @@ class Extractor:
             self.sample_data["Compound"].str.contains("C13")
         ].copy()
 
+        # If any missing C13, they are stored here in a dictionnary (key: "Compound", value: list of missing compounds with “ C13” suffix)
+        # They will be added to the C13 areas table at the end of the process
+        # If no missing C13, the value is None
+        self.missing_c13_std = Extractor._check_if_std(self.c12_areas, self.c13_areas)
+        
     @property
     def norm_unit(self):
         """
@@ -463,11 +468,17 @@ class Extractor:
 
         self.c12_areas = pd.pivot_table(self.c12_areas, "Area", "Compound", "Sample_Name")
         self.c13_areas = pd.pivot_table(self.c13_areas, "Area", "Compound", "Sample_Name")
-
+        # If missing C13 compounds, add them to the C13 areas table
+        if self.missing_c13_std:
+            self.c13_areas = pd.concat([self.c13_areas, 
+                                        pd.DataFrame(self.missing_c13_std).set_index("Compound")],
+                                        ).sort_index()
+                                        
         # get rid of rows where all data points are excluded
-        self.c12_areas = self.c12_areas[~self.c12_areas.isin(["Excluded"]).all(axis=1)]
-        self.c13_areas = self.c13_areas[~self.c13_areas.isin(["Excluded"]).all(axis=1)]
+        # self.c12_areas = self.c12_areas[~self.c12_areas.isin(["Excluded"]).all(axis=1)]
+        # self.c13_areas = self.c13_areas[~self.c13_areas.isin(["Excluded"]).all(axis=1)]
 
+        
         self.excluded_c12_areas = self.c12_areas[
             self.c12_areas.isin(["Excluded"]).all(axis=1)
         ]
@@ -499,11 +510,11 @@ class Extractor:
         self.c13_areas["unit"] = base_unit
         self.c12_areas = self.c12_areas[c12_cols]
         self.c12_areas = self._replace(
-                self.c12_areas, [np.inf, np.nan], "NA", "dataframe"
+                self.c12_areas, [np.inf, np.nan], "ND", "dataframe"
             )
         self.c13_areas = self.c13_areas[c13_cols]
         self.c13_areas = self._replace(
-                self.c13_areas, [np.inf, np.nan], "NA", "dataframe"
+                self.c13_areas, [np.inf, np.nan], "ND", "dataframe"
             )
         self.excel_tables.append(
             ("C12_areas", self.c12_areas)
@@ -568,14 +579,15 @@ class Extractor:
         lloq_masks = []
         uloq_masks = []
         for idx in self.loq_table.index:
-            lloq_mask = self.concentration_table.loc[idx, :].apply(
-                lambda x: float(x) < self.calib_data.at[idx, "min"]
-            )
-            uloq_mask = self.concentration_table.loc[idx, :].apply(
-                lambda x: float(x) > self.calib_data.at[idx, "max"]
-            )
-            lloq_masks.append(lloq_mask)
-            uloq_masks.append(uloq_mask)
+            if idx in self.calib_data.index: 
+                lloq_mask = self.concentration_table.loc[idx, :].apply(
+                    lambda x: float(x) < self.calib_data.at[idx, "min"]
+                )
+                uloq_mask = self.concentration_table.loc[idx, :].apply(
+                    lambda x: float(x) > self.calib_data.at[idx, "max"]
+                )
+                lloq_masks.append(lloq_mask)
+                uloq_masks.append(uloq_mask)
         # Transpose dfs because concentrentration tables are wrong way round
         lloq_mask = pd.concat(lloq_masks, axis=1).transpose()
         uloq_mask = pd.concat(uloq_masks, axis=1).transpose()
@@ -621,20 +633,20 @@ class Extractor:
                 self.normalised_quantities, [np.inf, np.nan], "NA", "dataframe"
             )
 
-        self.quantities = pd.merge(
-            left=self.quantities,
-            right=self.min_max,
-            how="left",
-            left_index=True,
-            right_index=True
-        )
-        self.normalised_quantities = pd.merge(
-            left=self.normalised_quantities,
-            right=self.min_max,
-            how="left",
-            left_index=True,
-            right_index=True
-        )
+        # self.quantities = pd.merge(
+        #     left=self.quantities,
+        #     right=self.min_max,
+        #     how="left",
+        #     left_index=True,
+        #     right_index=True
+        # )
+        # self.normalised_quantities = pd.merge(
+        #     left=self.normalised_quantities,
+        #     right=self.min_max,
+        #     how="left",
+        #     left_index=True,
+        #     right_index=True
+        # )
         self.loq_table = self.loq_table[cols]
         self.loq_table = self._replace(
                 self.loq_table, [np.inf, np.nan], "NA", "dataframe"
@@ -655,6 +667,9 @@ class Extractor:
         self.concentration_table = self.concentration_table.map(
             format
         )
+        self.concentration_table = self._replace(
+            self.concentration_table, [np.inf, np.nan], "ND", "dataframe"
+        )
         self.loq_table = self.loq_table.mask(
             self.concentration_table == "ND", "ND"
         )
@@ -664,13 +679,14 @@ class Extractor:
         self.loq_table["unit"] = base_unit
         self.concentration_table, self.loq_table = \
             self.concentration_table[cols], self.loq_table[cols]
-        self.concentration_table = pd.merge(
-            left=self.concentration_table,
-            right=self.min_max,
-            how="left",
-            left_index=True,
-            right_index=True
-        )
+        
+        # self.concentration_table = pd.merge(
+        #     left=self.concentration_table,
+        #     right=self.min_max,
+        #     how="left",
+        #     left_index=True,
+        #     right_index=True
+        # )
 
     def generate_concentrations_table(self, loq_export, base_unit=None):
 
@@ -688,11 +704,11 @@ class Extractor:
             values="Calculated Amt"
         )
         # Replace nans and nulls with "NA"
-        if not self.calib_nulls.empty:
-            self.concentration_table.drop(
-                index=list(self.calib_nulls.columns),
-                inplace=True
-            )
+        # if not self.calib_nulls.empty:
+        #     self.concentration_table.drop(
+        #         index=list(self.calib_nulls.columns),
+        #         inplace=True
+        #     )
         # sort the columns naturally
         new_cols = natsorted(self.concentration_table.columns)
         self.concentration_table = self.concentration_table[new_cols]
@@ -702,13 +718,13 @@ class Extractor:
             self._handle_conc_norm(new_cols, base_unit)
         else:
             self._handle_conc_no_norm(new_cols, base_unit)
-        self.loq_table = pd.merge(
-            left=self.loq_table,
-            right=self.min_max,
-            how="left",
-            left_index=True,
-            right_index=True
-        )
+        # self.loq_table = pd.merge(
+        #     left=self.loq_table,
+        #     right=self.min_max,
+        #     how="left",
+        #     left_index=True,
+        #     right_index=True
+        # )
         # Add to export lists
         if self.metadata is not None:
             self.excel_tables.append(
@@ -738,30 +754,12 @@ class Extractor:
         the subrogation of the c13 signal). 
         """
 
-        # Isolate c12 and c13 data
+        # Isolate c12
         c12 = self.sample_data[
-            ~self.sample_data["Compound"].str.contains("C13")].copy()
-        c13 = self.sample_data[
-            self.sample_data["Compound"].str.contains("C13")].copy() 
-        # Use the _check_if_std method to check for missing c13 compounds   
-        c12_compounds, missing_c13_std = self._check_if_std(
-            list(c12["Compound"].unique()), list(c13["Compound"].unique())
-        )
-        if missing_c13_std:
-            self.logger.info(
-                f"Metabolites missing from IDMS: \n{missing_c13_std}")
-        else:
-            self.logger.info("All metabolites are present in the IDMS")
-        
-        c13.loc[:, "Compound"] = c13.loc[:, "Compound"].str.slice(0, -4)
-        # Set indexes and sort them for both c12 and c13 dataframes to ensure they are the same
+            ~self.sample_data["Compound"].str.contains("C13")
+        ].copy()
         c12.set_index(["Compound", "Sample_Name"], inplace=True)
-        c13.set_index(["Compound", "Sample_Name"], inplace=True)
         c12.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
-        c13.sort_index(level=['Compound', 'Sample_Name'], inplace=True)
-        # Drop missing compounds from c12 df
-        if missing_c13_std:
-            c12.drop(missing_c13_std, inplace=True)
         
         # "Response Ratio: contains a ratio between c12 and c13 (takes c13 signal subrogation into account) for each compound and sample
         self.ratios = c12["Response Ratio"]
@@ -771,7 +769,7 @@ class Extractor:
         # Values in the ratios column are in scientific notation, convert them to numeric
         self.ratios["Ratios"] = pd.to_numeric(self.ratios["Ratios"], errors="coerce")
         self.ratios = pd.pivot_table(self.ratios, "Ratios", "Compound",
-                                    "Sample_Name")
+                                    "Sample_Name", dropna=False)
         
         # Add a unit column to the ratios table
         base_unit = "12C/13C"
@@ -922,27 +920,28 @@ class Extractor:
     #         )
     
     @staticmethod
-    def _check_if_std(c12_compounds, c13_compounds):
+    def _check_if_std(c12_area, c13_area):
         """
-        Get list of missing standards in the IDMS (13C) signals. If none, do
-        nothing and return 12C compounds list as is. Else, remove the missing
-        metabolites from the list of 12C compounds to drop them from data
-        after.
+        Get list of missing standards in the IDMS (13C) signals.
 
-        :param c12_compounds: list of all the 12C compound names in data
-        :param c13_compounds: list of all the 13C compound names in data
-        :return: list of 12C compounds minus the removed compounds and list
-                 of the compounds missing from IDMS
+        :param c12_area: C12 sample data
+        :param c13_area: C13 sample data
+        :return: if missing standards, return a dictionary of missing c13 standards
         """
+
+        # Isolate c12 and c13 data
+        c12 = c12_area
+        c13 = c13_area
+        c12_compounds = list(c12["Compound"].unique())
+        c13_compounds = list(c13["Compound"].unique())
 
         trunc_c13 = [std[:-4] for std in c13_compounds]
         missing_std = [x for x in c12_compounds if x not in trunc_c13]
         if missing_std:
-            for x in missing_std:
-                c12_compounds.remove(x)
-            return c12_compounds, missing_std
+            # return a dictionary of missing c13 standards
+            return {"Compound": [f"{x} C13" for x in missing_std]}
         else:
-            return c12_compounds, None
+            return None
 
     @staticmethod
     def _isolate_nulls(df: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
@@ -968,14 +967,15 @@ class Extractor:
         :return: loq_table or masks to apply for loq table
         """
         for idx in loq_table.index:
-            lloq_mask = loq_table.loc[idx, :].apply(
-                lambda x: float(x) < self.calib_data.at[idx, "min"])
-            uloq_mask = loq_table.loc[idx, :].apply(
-                lambda x: float(x) > self.calib_data.at[idx, "max"])
-            loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
-                                                                other="<LLOQ")
-            loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
-                                                                other=">ULOQ")
+            if idx in self.calib_data.index:
+                lloq_mask = loq_table.loc[idx, :].apply(
+                    lambda x: float(x) < self.calib_data.at[idx, "min"])
+                uloq_mask = loq_table.loc[idx, :].apply(
+                    lambda x: float(x) > self.calib_data.at[idx, "max"])
+                loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
+                                                                    other="<LLOQ")
+                loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
+                                                                    other=">ULOQ")
         return loq_table
 
     @staticmethod
@@ -1218,9 +1218,7 @@ class Extractor:
         if not pca:
             if isinstance(self.concentration_table, pd.DataFrame) or isinstance(
                     self.loq_table, pd.DataFrame):
-                concentrations = self.loq_table.drop(
-                    ["LLOQ", "ULOQ"], axis=1
-                ).copy()
+                concentrations = self.loq_table
                 concentrations = self._replace(concentrations, ["<LLOQ", "ND"],
                                                "NA", "dataframe")
                 concentrations = self._replace(concentrations, [">ULOQ", "ND"],
@@ -1267,3 +1265,10 @@ class QCError(Error):
         self.message = message
 
 
+# if __name__ == "__main__":
+#     from ms_reader import skyline_convert
+#     # with open(r"C:\Users\kouakou\Documents\MSREADER_data\data\20240715_GUILLOT_HILIC-POSNEG_QUANT_sansAA-NEG.tsv", "rb") as file:
+#     #     data = skyline_convert.import_skyline_dataset(file)
+    
+#     # extract = Extractor(data)
+    
