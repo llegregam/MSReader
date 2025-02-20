@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.4] - 2025-02-20
+
+### Fixed
+
+- Fixed a bug concerning outputs and the exported table.
+
+
 ## [1.7.3] - 2025-02-20
 
 ### Fixed
