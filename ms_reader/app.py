@@ -195,6 +195,29 @@ if data:
                          "the given metadata file (click to display)"):
             st.dataframe(reader.metadata)
 
+    if reader.calib_data is not None:
+        try:
+            reader.handle_calibration()
+        except Exception as e:
+            st.error(f"There was an error while handling the calibration data:\n{e}")
+            raise
+    
+    # Generates all the tables
+    reader.generate_areas_table()
+    reader.generate_ratios()
+
+    # Check that the "concentration_unit" and "lloq_box" keys do not exist in session_state
+    # we then retrieve and store the value of widgets with this key 
+    if "concentration_unit" not in st.session_state:
+        st.session_state["concentration_unit"] = CONCENTRATION_UNIT 
+    elif reader.metadata is not None:
+        st.session_state["concentration_unit"] = QUANTITY_UNIT
+
+    if "lloq_box" not in st.session_state:
+        st.session_state["lloq_box"] = False   
+    
+    reader.generate_concentrations_table(loq_export=st.session_state["lloq_box"], base_unit=st.session_state["concentration_unit"])
+
     st.subheader("Choose tables to output")
 
     with st.form("Table select"):
@@ -213,13 +236,15 @@ if data:
             ratios_box = st.checkbox(
                 "Ratios",
                 key="ratios_box",
-                disabled=True if reader.c13_areas.empty else False
+                disabled=True if reader.ratios is None else False
+                # disabled=True if reader.c13_areas.empty else False
             )
         with cln4:
             conc_box = st.checkbox(
                 "Concentrations" if reader.metadata is None else "Quantities",
                 key="conc_box",
-                disabled=True if reader.calib_data is None else False
+                # disabled=True if reader.calib_data is None else False
+                disabled=True if reader.concentration_table is None else False
             )
         with cln5:
             lloq_box = st.checkbox(
@@ -231,7 +256,8 @@ if data:
             label="Input the concentration unit"
             if reader.metadata is None
             else "Input the quantity unit",
-            value = CONCENTRATION_UNIT if reader.metadata is None else QUANTITY_UNIT
+            key="concentration_unit",
+            # value = CONCENTRATION_UNIT if reader.metadata is None else QUANTITY_UNIT
         )
 
         destination = st.text_input("Input destination path for excel files")
@@ -240,12 +266,12 @@ if data:
         submit_stat_out = st.form_submit_button("Export stat output")
         submit_pca_out = st.form_submit_button("Export stat output for PCA")
 
-    if reader.calib_data is not None:
-        try:
-            reader.handle_calibration()
-        except Exception as e:
-            st.error(f"There was an error while handling the calibration data:\n{e}")
-            raise
+    # if reader.calib_data is not None:
+        # try:
+        #     # reader.handle_calibration()
+        # except Exception as e:
+        #     st.error(f"There was an error while handling the calibration data:\n{e}")
+        #     raise
     if report_box:
         try:
             reader.generate_report(metabolites_to_drop)
@@ -256,7 +282,7 @@ if data:
             with st.expander("Show report"):
                 st.dataframe(reader.calrep)
     if areas_box:
-        reader.generate_areas_table()
+        # reader.generate_areas_table()
         if preview:
             with st.expander("Show C12 Areas"):
                 st.dataframe(reader.c12_areas.apply(df_format))
@@ -273,7 +299,7 @@ if data:
                 with st.expander("Show normalised 12C Areas"):
                     st.dataframe(reader.norm_c12_areas.apply(df_format))
     if ratios_box:
-        reader.generate_ratios()
+        # reader.generate_ratios()
         if preview:
             with st.expander("Show Ratios"):
                 st.dataframe(reader.ratios.apply(df_format))
@@ -281,7 +307,7 @@ if data:
                 with st.expander("Show normalised ratios"):
                     st.dataframe(reader.normalised_ratios.apply(df_format))
     if conc_box or lloq_box:
-        reader.generate_concentrations_table(lloq_box, concentration_unit)
+        # reader.generate_concentrations_table(loq_export=lloq_box, base_unit=st.session_state["concentration_unit"])
         if conc_box:
             if preview:
                 if reader.metadata is None:

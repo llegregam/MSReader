@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3] - 2025-02-20
+
+### Fixed
+
+- Fixed the problem of certain widgets being disabled when selecting tables to output. 
+
+
 ## [1.7.2] - 2024-12-04
 
 ### Fixed

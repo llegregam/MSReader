@@ -697,12 +697,19 @@ class Extractor:
         concentrations = self.sample_data[
             ~self.sample_data["Compound"].str.contains("C13")
         ]
+
+        # concentrations = pd.pivot_table(
+        #     concentrations, "Calculated Amt", "Compound", "Sample_Name"
+        # )
+        
         # transpose the data
-        self.concentration_table = concentrations.pivot(
-            index="Compound",
-            columns="Sample_Name",
-            values="Calculated Amt"
-        )
+        self.concentration_table = pd.pivot_table(
+            concentrations, "Calculated Amt", "Compound", "Sample_Name")
+        # self.concentration_table = concentrations.pivot(
+        #     index="Compound",
+        #     columns="Sample_Name",
+        #     values="Calculated Amt"
+        # )
         # Replace nans and nulls with "NA"
         # if not self.calib_nulls.empty:
         #     self.concentration_table.drop(
@@ -966,16 +973,17 @@ class Extractor:
         :param loq_table: table to apply LOQs to
         :return: loq_table or masks to apply for loq table
         """
-        for idx in loq_table.index:
-            if idx in self.calib_data.index:
-                lloq_mask = loq_table.loc[idx, :].apply(
-                    lambda x: float(x) < self.calib_data.at[idx, "min"])
-                uloq_mask = loq_table.loc[idx, :].apply(
-                    lambda x: float(x) > self.calib_data.at[idx, "max"])
-                loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
-                                                                    other="<LLOQ")
-                loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
-                                                                    other=">ULOQ")
+        if self.calib_data is not None:
+            for idx in loq_table.index:
+                if idx in self.calib_data.index:
+                    lloq_mask = loq_table.loc[idx, :].apply(
+                        lambda x: float(x) < self.calib_data.at[idx, "min"])
+                    uloq_mask = loq_table.loc[idx, :].apply(
+                        lambda x: float(x) > self.calib_data.at[idx, "max"])
+                    loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
+                                                                        other="<LLOQ")
+                    loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
+                                                                        other=">ULOQ")
         return loq_table
 
     @staticmethod
