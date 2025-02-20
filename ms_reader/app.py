@@ -282,6 +282,16 @@ if data:
             with st.expander("Show report"):
                 st.dataframe(reader.calrep)
     if areas_box:
+        reader.excel_tables.append(
+            ("C12_areas", reader.c12_areas)
+        )
+        reader.excel_tables.append(
+            ("C13_areas", reader.c13_areas)
+        )
+        if reader.metadata is not None:
+            reader.excel_tables.append(
+                ("Normalised_C12_areas", reader.norm_c12_areas)
+            )
         # reader.generate_areas_table()
         if preview:
             with st.expander("Show C12 Areas"):
@@ -299,6 +309,14 @@ if data:
                 with st.expander("Show normalised 12C Areas"):
                     st.dataframe(reader.norm_c12_areas.apply(df_format))
     if ratios_box:
+        reader.excel_tables.append(
+            ("Ratios", reader.ratios)
+        )
+        if reader.metadata is not None:
+            reader.excel_tables.append(
+                ("Normalised_Ratios", reader.normalised_ratios)
+            )
+        
         # reader.generate_ratios()
         if preview:
             with st.expander("Show Ratios"):
@@ -309,6 +327,17 @@ if data:
     if conc_box or lloq_box:
         # reader.generate_concentrations_table(loq_export=lloq_box, base_unit=st.session_state["concentration_unit"])
         if conc_box:
+            if reader.metadata is not None :
+                reader.excel_tables.append(
+                    ("Quantities", reader.quantities)
+                )
+                reader.excel_tables.append(
+                ("Normalised_Quantities", reader.normalised_quantities),
+                )
+            else: 
+                reader.excel_tables.append(
+                ("Concentrations", reader.concentration_table),
+            )
             if preview:
                 if reader.metadata is None:
                     with st.expander("Show concentrations (no lloq)"):
@@ -325,6 +354,14 @@ if data:
                             reader.normalised_quantities.apply(df_format)
                         )
         if lloq_box:
+            if reader.metadata is not None:
+                reader.excel_tables.append(
+                        ("Normalised_Quantities_LLOQ", reader.loq_table)
+                    )
+            else:
+                reader.excel_tables.append(
+                    ("Concentrations_LLOQ", reader.loq_table)
+                )
             if preview:
                 if reader.metadata is None:
                     with st.expander("Show concentrations (with lloq)"):

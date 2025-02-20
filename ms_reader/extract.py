@@ -516,16 +516,16 @@ class Extractor:
         self.c13_areas = self._replace(
                 self.c13_areas, [np.inf, np.nan], "ND", "dataframe"
             )
-        self.excel_tables.append(
-            ("C12_areas", self.c12_areas)
-        )
-        self.excel_tables.append(
-            ("C13_areas", self.c13_areas)
-        )
-        if self.metadata is not None:
-            self.excel_tables.append(
-                ("Normalised_C12_areas", self.norm_c12_areas)
-            )
+        # self.excel_tables.append(
+        #     ("C12_areas", self.c12_areas)
+        # )
+        # self.excel_tables.append(
+        #     ("C13_areas", self.c13_areas)
+        # )
+        # if self.metadata is not None:
+        #     self.excel_tables.append(
+        #         ("Normalised_C12_areas", self.norm_c12_areas)
+        #     )
 
     def normalise(self, df, multiply=True, divide=True) -> pd.DataFrame:
         """
@@ -733,26 +733,26 @@ class Extractor:
         #     right_index=True
         # )
         # Add to export lists
-        if self.metadata is not None:
-            self.excel_tables.append(
-                ("Quantities", self.quantities)
-            )
-            self.excel_tables.append(
-                ("Normalised_Quantities", self.normalised_quantities),
-            )
-            if loq_export:
-                if self.metadata is not None:
-                    self.excel_tables.append(
-                        ("Normalised_Quantities_LLOQ", self.loq_table)
-                    )
-        else:
-            self.excel_tables.append(
-                ("Concentrations", self.concentration_table),
-            )
-            if loq_export:
-                self.excel_tables.append(
-                    ("Concentrations_LLOQ", self.loq_table)
-                )
+        # if self.metadata is not None:
+        #     self.excel_tables.append(
+        #         ("Quantities", self.quantities)
+        #     )
+        #     self.excel_tables.append(
+        #         ("Normalised_Quantities", self.normalised_quantities),
+        #     )
+        #     if loq_export:
+        #         if self.metadata is not None:
+        #             self.excel_tables.append(
+        #                 ("Normalised_Quantities_LLOQ", self.loq_table)
+        #             )
+        # else:
+        #     self.excel_tables.append(
+        #         ("Concentrations", self.concentration_table),
+        #     )
+        #     if loq_export:
+        #         self.excel_tables.append(
+        #             ("Concentrations_LLOQ", self.loq_table)
+        #         )
 
     def generate_ratios(self):
         """
@@ -803,14 +803,14 @@ class Extractor:
             self.ratios, [np.inf, np.nan], "NA", "dataframe"
         )
         
-        self.excel_tables.append(
-            ("Ratios", self.ratios)
-        )
+        # self.excel_tables.append(
+        #     ("Ratios", self.ratios)
+        # )
         
-        if self.metadata is not None:
-            self.excel_tables.append(
-                ("Normalised_Ratios", self.normalised_ratios)
-            )
+        # if self.metadata is not None:
+        #     self.excel_tables.append(
+        #         ("Normalised_Ratios", self.normalised_ratios)
+        #     )
         
     # def generate_ratios(self):
 
