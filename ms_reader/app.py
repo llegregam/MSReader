@@ -209,10 +209,8 @@ if data:
     # Check that the "concentration_unit" and "lloq_box" keys do not exist in session_state
     # we then retrieve and store the value of widgets with this key 
     if "concentration_unit" not in st.session_state:
-        st.session_state["concentration_unit"] = CONCENTRATION_UNIT 
-    elif reader.metadata is not None:
-        st.session_state["concentration_unit"] = QUANTITY_UNIT
-
+        st.session_state["concentration_unit"] = None
+   
     if "lloq_box" not in st.session_state:
         st.session_state["lloq_box"] = False   
     
@@ -256,9 +254,13 @@ if data:
             label="Input the concentration unit"
             if reader.metadata is None
             else "Input the quantity unit",
-            key="concentration_unit",
-            # value = CONCENTRATION_UNIT if reader.metadata is None else QUANTITY_UNIT
+            # key="concentration_unit",
+            value = CONCENTRATION_UNIT if reader.metadata is None else QUANTITY_UNIT,
         )
+        # Save new concentration unit to session state if it is different
+        st.session_state["concentration_unit"] = concentration_unit
+        # Re-applies function if unit is modified
+        reader.generate_concentrations_table(loq_export=st.session_state["lloq_box"], base_unit=st.session_state["concentration_unit"])
 
         destination = st.text_input("Input destination path for excel files")
         preview = st.form_submit_button("Preview")
