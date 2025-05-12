@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.5] - 2025-05-12
+
+### Fixed
+
+- Fixed bug when changing concentration unit after adding metadata
+
 ## [1.7.4] - 2025-02-20
 
 ### Fixed
