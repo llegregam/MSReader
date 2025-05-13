@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.6] - 2025-05-13
+
+### Fixed
+
+- Fixed a bug where the absence of normalization data was incorrectly converted to 1 instead of 0. The system now uses 0 when normalization data is missing.
+
 ## [1.7.5] - 2025-05-12
 
 ### Fixed

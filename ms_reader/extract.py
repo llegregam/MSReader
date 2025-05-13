@@ -193,7 +193,7 @@ class Extractor:
             )
         else:
             # Handle NaNs
-            self.md_values.fillna(1, inplace=True)
+            self.md_values.fillna(0, inplace=True)
 
         # Make sure units are the same for all samples
         for col in self.md_units.columns:
