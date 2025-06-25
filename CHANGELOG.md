@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.7] - 2025-06-25
+
+### Fixed
+
+- Fixed bug absence of metabolites in some tabs of the output file
+
 ## [1.7.6] - 2025-05-13
 
 ### Fixed
