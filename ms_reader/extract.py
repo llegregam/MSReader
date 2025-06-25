@@ -704,7 +704,7 @@ class Extractor:
         
         # transpose the data
         self.concentration_table = pd.pivot_table(
-            concentrations, "Calculated Amt", "Compound", "Sample_Name")
+            concentrations, "Calculated Amt", "Compound", "Sample_Name", dropna=False)
         # self.concentration_table = concentrations.pivot(
         #     index="Compound",
         #     columns="Sample_Name",
