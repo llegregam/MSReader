@@ -410,11 +410,20 @@ class Extractor:
         """
 
         if self.met_class == "CM":
-            qc_mets = ["FruBP", "Orotate", "Rib1P"]
+            qc_mets = ["FruBP", "Orotate", "Pent5P"]
             qc_verif = self.qc_data[
                 self.qc_data["Compound"].isin(qc_mets)
             ].copy()
-        elif self.met_class == "AA" or self.met_class == "CoA":
+        # elif self.met_class == "AA" or self.met_class == "CoA":
+        #     qc_verif = self.qc_data[
+        #         ~self.qc_data["Compound"].str.contains("C13")
+        #     ].copy()
+        elif self.met_class == "AA":
+            qc_mets = ["Arg", "Asp", "Phe"]
+            qc_verif = self.qc_data[
+                self.qc_data["Compound"].isin(qc_mets)
+            ].copy()
+        elif self.met_class == "CoA":
             qc_verif = self.qc_data[
                 ~self.qc_data["Compound"].str.contains("C13")
             ].copy()
