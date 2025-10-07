@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0] - 2025-10-07
+
+### Changed
+
+Change in certain metabolites for quality control:
+- Central metabolites: replacement of Rib1P with Pent5P
+- Amino acids: instead of all amino acids, only Phenylalanine, Aspartate, and Arginine are retained
+- Coenzymes A: unchanged
+
+
+# Changelog
+
 ## [1.7.7] - 2025-06-25
 
 ### Fixed
