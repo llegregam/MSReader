@@ -125,6 +125,21 @@ def handle_na(row):
     return row
 
 
+def compare_values(data):
+    """
+    This method allows you to verify that the values in the ‘Response Ratio’ column do not correspond to areas.
+    In the absence of IDMS, Skyline defaults to entering the metabolite area instead of NA.
+    To detect this case, the values in the ‘Area’ and ‘Response Ratio’ columns are compared: if they are similar 
+    (indicating that it is an area and not a ratio), the ‘Response Ratio’ value is replaced by np.nan.
+    
+    :param data: DataFrame containing the Skyline data
+    """
+    df_area = pd.to_numeric(data["Area"], errors="coerce")
+    df_ratio = pd.to_numeric(data["Response Ratio"], errors="coerce")
+
+    mask = np.isclose(df_area, df_ratio, equal_nan=True, rtol=0.005)
+    data.loc[mask, "Response Ratio"] = np.nan
+
 def import_skyline_dataset(skyline_file):
     """
     Import skyline dataset and transform into MS_Reader compatible format
@@ -152,7 +167,7 @@ def import_skyline_dataset(skyline_file):
         data["Calculated Amt"].replace(to_replace=re.compile(pattern='∞'), value="NaN", inplace=True)
         data["Calculated Amt"] = data["Calculated Amt"].apply(convert_calculated_amt)
     data = data.apply(handle_na, axis=1)
-
+    compare_values(data)
     return data
 
 
