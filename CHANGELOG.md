@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1] - 2026-02-02
+
+### Changed
+
+Fixed a bug originating from Skyline: in the absence of IDMS, the area value is now entered in the ratios column instead of NA. The issue is now resolved.
+
+# Changelog
+
 ## [1.8.0] - 2025-10-07
 
 ### Changed
