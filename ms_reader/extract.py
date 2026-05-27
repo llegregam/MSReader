@@ -65,7 +65,7 @@ class Extractor:
         columns = [
             "Compound", "Sample_Name", "Area", "Response Ratio", "Sample Type",
             "Calculated Amt", "Theoretical Amt",
-            "Excluded", "%Diff"
+            "Excluded", "%Diff", "R Squared"
         ]
         self.data = self.data[columns].copy()
         self._replace_nf()
@@ -379,6 +379,7 @@ class Extractor:
             {"min": "LLOQ", "max": "ULOQ"},
             axis=1
         )
+        min_max_calib["R Squared"] = self.calib_data.groupby("Compound")["R Squared"].first()
         self.calib_data = min_max_calib
         self.excel_tables.append(
             ("Calibration", self.calib_data)
