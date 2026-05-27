@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0] - 2026-05-27
+
+### Addition
+
+Added a "R Squared" column in the calibration tab of the output file, taken directly from the Skyline input file.
+
+# Changelog
+
 ## [1.8.1] - 2026-02-02
 
 ### Changed
