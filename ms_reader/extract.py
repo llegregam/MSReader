@@ -65,8 +65,14 @@ class Extractor:
         columns = [
             "Compound", "Sample_Name", "Area", "Response Ratio", "Sample Type",
             "Calculated Amt", "Theoretical Amt",
-            "Excluded", "%Diff", "R Squared"
+            "Excluded", "%Diff"
         ]
+
+        # Only for skyline input 
+        self.r_squared = None # If R Squared column is present, it is stored in a separate df to be added to the calibration table at the end of the process, 
+        if "R Squared" in self.data.columns:
+            self.r_squared = self.data.groupby("Compound")["R Squared"].first() 
+            
         self.data = self.data[columns].copy()
         self._replace_nf()
         self._split_dataframes()
@@ -379,7 +385,9 @@ class Extractor:
             {"min": "LLOQ", "max": "ULOQ"},
             axis=1
         )
-        min_max_calib["R Squared"] = self.calib_data.groupby("Compound")["R Squared"].first()
+        # If R Squared column is present (skyline), add it to the calibration table
+        if self.r_squared is not None:
+            min_max_calib["R Squared"] = self.r_squared
         self.calib_data = min_max_calib
         self.excel_tables.append(
             ("Calibration", self.calib_data)
