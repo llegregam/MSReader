@@ -286,7 +286,7 @@ class Extractor:
         :return: None
         """
         # Set the option to raise an error when downcasting
-        pd.set_option('future.no_silent_downcasting', True)
+        # pd.set_option('future.no_silent_downcasting', True)
 
         self.data["Area"] = self.data["Area"].replace("N/F", 0).infer_objects(copy=False)
         self.data["Calculated Amt"] = self.data["Calculated Amt"].replace("N/F", 0).copy()
@@ -399,6 +399,8 @@ class Extractor:
         :return: None
         """
         self._generate_minmax_calib()
+        self.calib_data = self.calib_data.astype(object)
+        self.calib_nulls = self.calib_data.astype(object)
         self.calib_data, self.calib_nulls = self._replace(
             self.calib_data,
             to_replace=[np.nan, 0],
@@ -998,6 +1000,7 @@ class Extractor:
                         lambda x: float(x) < self.calib_data.at[idx, "min"])
                     uloq_mask = loq_table.loc[idx, :].apply(
                         lambda x: float(x) > self.calib_data.at[idx, "max"])
+                    loq_table = loq_table.astype(object)
                     loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
                                                                         other="<LLOQ")
                     loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
