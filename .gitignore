@@ -1,3 +1,6 @@
 /venv/
 /.idea/
 /test_pypi_token.txt
+ms_reader/__pycache__/
+ms_reader.egg-info/
+tests/__pycache__/

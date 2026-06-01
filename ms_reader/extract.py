@@ -67,6 +67,12 @@ class Extractor:
             "Calculated Amt", "Theoretical Amt",
             "Excluded", "%Diff"
         ]
+
+        # Only for skyline input 
+        self.r_squared = None # If R Squared column is present, it is stored in a separate df to be added to the calibration table at the end of the process, 
+        if "R Squared" in self.data.columns:
+            self.r_squared = self.data.groupby("Compound")["R Squared"].first() 
+            
         self.data = self.data[columns].copy()
         self._replace_nf()
         self._split_dataframes()
@@ -280,7 +286,7 @@ class Extractor:
         :return: None
         """
         # Set the option to raise an error when downcasting
-        pd.set_option('future.no_silent_downcasting', True)
+        # pd.set_option('future.no_silent_downcasting', True)
 
         self.data["Area"] = self.data["Area"].replace("N/F", 0).infer_objects(copy=False)
         self.data["Calculated Amt"] = self.data["Calculated Amt"].replace("N/F", 0).copy()
@@ -379,6 +385,9 @@ class Extractor:
             {"min": "LLOQ", "max": "ULOQ"},
             axis=1
         )
+        # If R Squared column is present (skyline), add it to the calibration table
+        if self.r_squared is not None:
+            min_max_calib["R Squared"] = self.r_squared
         self.calib_data = min_max_calib
         self.excel_tables.append(
             ("Calibration", self.calib_data)
@@ -390,6 +399,8 @@ class Extractor:
         :return: None
         """
         self._generate_minmax_calib()
+        self.calib_data = self.calib_data.astype(object)
+        self.calib_nulls = self.calib_data.astype(object)
         self.calib_data, self.calib_nulls = self._replace(
             self.calib_data,
             to_replace=[np.nan, 0],
@@ -989,6 +1000,7 @@ class Extractor:
                         lambda x: float(x) < self.calib_data.at[idx, "min"])
                     uloq_mask = loq_table.loc[idx, :].apply(
                         lambda x: float(x) > self.calib_data.at[idx, "max"])
+                    loq_table = loq_table.astype(object)
                     loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~lloq_mask,
                                                                         other="<LLOQ")
                     loq_table.loc[idx, :] = loq_table.loc[idx, :].where(~uloq_mask,
